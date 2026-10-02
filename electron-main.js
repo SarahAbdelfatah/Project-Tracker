@@ -59,6 +59,7 @@ function validateDocument(value) {
   const ids = new Set();
   const metadata = isPlainObject(value.metadata) ? value.metadata : {};
   const preferences = isPlainObject(value.preferences) ? value.preferences : {};
+  const dashboard = isPlainObject(preferences.dashboard) ? preferences.dashboard : {};
   return {
     schemaVersion: 1,
     metadata: {
@@ -68,6 +69,17 @@ function validateDocument(value) {
     preferences: {
       theme: preferences.theme === 'dark' ? 'dark' : 'light',
       sidebarCollapsed: Boolean(preferences.sidebarCollapsed),
+      dashboard: {
+        focus: text(dashboard.focus, 'Dashboard focus', { max: 60 }) || 'all',
+        state: text(dashboard.state, 'Dashboard state', { max: 60 }) || 'all',
+        stage: text(dashboard.stage, 'Dashboard stage', { max: 60 }) || 'all',
+        phase: text(dashboard.phase, 'Dashboard phase', { max: 60 }) || 'all',
+        client: text(dashboard.client, 'Dashboard client', { max: 300 }) || 'all',
+        inputs: text(dashboard.inputs, 'Dashboard inputs', { max: 60 }) || 'all',
+        content: text(dashboard.content, 'Dashboard content', { max: 60 }) || 'all',
+        age: text(dashboard.age, 'Dashboard age', { max: 60 }) || 'all',
+        sort: text(dashboard.sort, 'Dashboard sort', { max: 60 }) || 'recent',
+      },
     },
     projects: value.projects.map((project, index) => validateProject(project, index, ids)),
     projectDetailsById: isPlainObject(value.projectDetailsById) ? value.projectDetailsById : {},
@@ -148,7 +160,7 @@ async function loadDocument() {
 
 function createEmptyDocument() {
   const now = new Date().toISOString();
-  return { schemaVersion: 1, metadata: { createdAt: now, updatedAt: now }, preferences: { theme: 'light', sidebarCollapsed: false }, projects: [], projectDetailsById: {}, activityByProjectId: {} };
+  return { schemaVersion: 1, metadata: { createdAt: now, updatedAt: now }, preferences: { theme: 'light', sidebarCollapsed: false, dashboard: { focus: 'all', state: 'all', stage: 'all', phase: 'all', client: 'all', inputs: 'all', content: 'all', age: 'all', sort: 'recent' } }, projects: [], projectDetailsById: {}, activityByProjectId: {} };
 }
 
 function storageStatus() {

@@ -20,6 +20,7 @@ function Icon({ name, size = 16 }) {
     moon:       <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />,
     panel:      <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></>,
     chevron:    <path d="m9 18 6-6-6-6" />,
+    chevronDown:<path d="m6 9 6 6 6-6" />,
     arrowLeft:  <><path d="m14 6-6 6 6 6" /><path d="M8 12h12" /></>,
     filter:     <><path d="M4 6h16M7 12h10M10 18h4" /></>,
     sort:       <><path d="M3 6h18M6 12h12M9 18h6" /></>,
@@ -75,8 +76,14 @@ function StatusStrip({ project }) {
 // ─── Individual project card ───────────────────────────────────────────────────
 function ProjectCard({ project, onCopy, onOpen }) {
   const stateKey = project.state?.toLowerCase().replace(' ', '-');
+  const currentStatus = project.step || (project.phase ? `${project.phase} stage` : STAGES[project.stage]?.label || 'Project status');
   return (
-    <article className="project-card">
+    <article className="project-card" tabIndex="0" onClick={() => onOpen(project.id)} onKeyDown={(event) => {
+      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        onOpen(project.id);
+      }
+    }}>
       <div className="card-top">
         <div className="card-info">
           <div className="card-name">{project.name}</div>
@@ -85,7 +92,7 @@ function ProjectCard({ project, onCopy, onOpen }) {
             <span className="meta-dot">·</span>
             <button
               className="opid-btn"
-              onClick={() => onCopy(project.opid)}
+              onClick={(event) => { event.stopPropagation(); onCopy(project.opid); }}
               title={`Copy ${project.opid}`}
               aria-label={`Copy OPID ${project.opid}`}
             >
@@ -96,7 +103,8 @@ function ProjectCard({ project, onCopy, onOpen }) {
         </div>
         <div className="card-badges">
           <span className={`state-badge ${stateKey}`}>{project.state}</span>
-          <button className="chevron-btn" onClick={() => onOpen(project.id)} aria-label={`Open ${project.name}`}>
+          <span className="card-current-status"><span>Current</span>{currentStatus}</span>
+          <button className="chevron-btn" onClick={(event) => { event.stopPropagation(); onOpen(project.id); }} aria-label={`Open ${project.name}`}>
             <Icon name="chevron" size={14} />
           </button>
         </div>
@@ -379,15 +387,83 @@ function RecoveryDialog({ onStartFresh, onImport }) {
   );
 }
 
+const DEFAULT_DASHBOARD_FILTERS = { focus: 'all', state: 'all', stage: 'all', phase: 'all', client: 'all', inputs: 'all', content: 'all', age: 'all', sort: 'recent' };
+
+function FilterField({ label, value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const fieldRef = useRef(null);
+  const selected = options.find(([optionValue]) => optionValue === value) || options[0];
+
+  useEffect(() => {
+    const closeWhenOutside = (event) => {
+      if (fieldRef.current && !fieldRef.current.contains(event.target)) setOpen(false);
+    };
+    globalThis.document.addEventListener('mousedown', closeWhenOutside);
+    return () => globalThis.document.removeEventListener('mousedown', closeWhenOutside);
+  }, []);
+
+  return (
+    <div className="filter-field" ref={fieldRef}>
+      <span>{label}</span>
+      <button className={`filter-select-trigger ${open ? 'open' : ''}`} onClick={() => setOpen((isOpen) => !isOpen)} aria-haspopup="listbox" aria-expanded={open}>
+        <span>{selected[1]}</span><Icon name="chevronDown" size={15} />
+      </button>
+      {open && (
+        <div className="filter-select-menu" role="listbox" aria-label={label}>
+          {options.map(([optionValue, optionLabel]) => (
+            <button key={optionValue} className={optionValue === value ? 'selected' : ''} role="option" aria-selected={optionValue === value} onClick={() => { onChange(optionValue); setOpen(false); }}>
+              {optionLabel}{optionValue === value && <Icon name="check" size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FiltersDialog({ filters, clients, onChange, onClear, onClose }) {
+  const set = (key, value) => onChange({ ...filters, [key]: value });
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="dialog filters-dialog" role="dialog" aria-modal="true" aria-labelledby="filters-title">
+        <div className="dialog-header filters-header">
+          <div><h2 className="dialog-title" id="filters-title">Find the right project</h2><p className="dialog-desc">Combine a focus view with precise filters and sorting.</p></div>
+          <button className="text-button" onClick={onClear}>Clear all</button>
+        </div>
+        <div className="dialog-body filters-body">
+          <div className="focus-grid" role="group" aria-label="Focus views">
+            {[
+              ['all', 'All projects'], ['follow-up', 'Needs follow-up'], ['waiting', 'Waiting on client'], ['blocked', 'Blocked'],
+              ['qualification', 'Qualification'], ['proposing', 'Proposing'], ['execution', 'Execution'], ['delivery', 'Delivery'],
+              ['missing-inputs', 'Missing inputs'], ['missing-bom', 'Missing BOM'], ['recent', 'Recently updated'],
+            ].map(([value, label]) => <button key={value} className={`focus-option ${filters.focus === value ? 'active' : ''}`} onClick={() => set('focus', value)}>{label}</button>)}
+          </div>
+          <div className="filter-grid">
+            <FilterField label="Project state" value={filters.state} onChange={(value) => set('state', value)} options={[['all', 'Any state'], ...PROJECT_STATES.map((state) => [state, state])]} />
+            <FilterField label="Workflow stage" value={filters.stage} onChange={(value) => set('stage', value)} options={[['all', 'Any stage'], ...Object.entries(STAGES).map(([key, stage]) => [key, stage.label])]} />
+            <FilterField label="Bidding group" value={filters.phase} onChange={(value) => set('phase', value)} options={[['all', 'Any group'], ['Proposing', 'Proposing'], ['Execution', 'Execution']]} />
+            <FilterField label="Client / account" value={filters.client} onChange={(value) => set('client', value)} options={[['all', 'Any client'], ...clients.map((client) => [client, client])]} />
+            <FilterField label="Project inputs" value={filters.inputs} onChange={(value) => set('inputs', value)} options={[['all', 'Any coverage'], ['complete', 'All received'], ['missing', 'Missing inputs']]} />
+            <FilterField label="Project content" value={filters.content} onChange={(value) => set('content', value)} options={[['all', 'Any content'], ['requirement', 'Has requirement'], ['bom', 'Has BOM'], ['missing-bom', 'Missing BOM']]} />
+            <FilterField label="Last update" value={filters.age} onChange={(value) => set('age', value)} options={[['all', 'Any time'], ['1', 'Today'], ['3', 'Last 3 days'], ['7', 'Last 7 days'], ['14', 'Last 14 days'], ['30', 'Last 30 days']]} />
+            <FilterField label="Sort by" value={filters.sort} onChange={(value) => set('sort', value)} options={[['recent', 'Recently updated'], ['oldest', 'Oldest update'], ['newest', 'Newest project'], ['created', 'Oldest project'], ['project-az', 'Project A–Z'], ['client-az', 'Client A–Z'], ['workflow', 'Workflow order'], ['inputs', 'Least-complete inputs']]} />
+          </div>
+        </div>
+        <div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Show projects</button></div>
+      </section>
+    </div>
+  );
+}
+
 // ─── Root app ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [document, setDocument] = useState(null);
   const [storage, setStorage] = useState(null);
   const [recovery, setRecovery] = useState({ state: 'loading' });
   const [saveState, setSaveState] = useState('loading');
-  const [filter, setFilter]     = useState('All');
   const [query, setQuery]       = useState('');
   const [showAdd, setShowAdd]   = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [showDataTools, setShowDataTools] = useState(false);
   const [dataToolMessage, setDataToolMessage] = useState('');
   const [toast, setToast]       = useState(null);
@@ -449,10 +525,19 @@ export default function App() {
 
   const projects = document?.projects || [];
   const theme = document?.preferences?.theme === 'dark' ? 'dark' : 'light';
+  const dashboardFilters = { ...DEFAULT_DASHBOARD_FILTERS, ...(document?.preferences?.dashboard || {}) };
 
   useEffect(() => {
     globalThis.document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  const updateDashboardFilters = useCallback((nextFilters) => {
+    if (!document) return;
+    persistDocument({
+      ...document,
+      preferences: { ...document.preferences, dashboard: { ...DEFAULT_DASHBOARD_FILTERS, ...nextFilters } },
+    });
+  }, [document, persistDocument]);
 
   // Toast helper — auto‑dismisses after 2 s
   const showToast = useCallback((msg, icon = 'check') => {
@@ -475,9 +560,9 @@ export default function App() {
     if (!document) return;
     persistDocument(createProject(document, form));
     setShowAdd(false);
-    setFilter('All');
+    updateDashboardFilters({ ...dashboardFilters, focus: 'all', state: 'all' });
     showToast('Project created');
-  }, [document, persistDocument, showToast]);
+  }, [dashboardFilters, document, persistDocument, showToast, updateDashboardFilters]);
 
   const handleExport = useCallback(async () => {
     const result = await exportTrackerBackup();
@@ -518,12 +603,54 @@ export default function App() {
 
   // Filtered list
   const filtered = useMemo(() => {
-    return projects.filter((p) => {
-      const matchState = filter === 'All' || p.state === filter;
-      const search = `${p.name} ${p.client} ${p.opid}`.toLowerCase();
-      return matchState && search.includes(query.toLowerCase());
+    const now = Date.now();
+    const detailsById = document?.projectDetailsById || {};
+    const activityByProjectId = document?.activityByProjectId || {};
+    const updateTime = (project) => Date.parse(project.updated) || 0;
+    const inputsFor = (detail) => Array.isArray(detail?.inputs) ? detail.inputs : [];
+    const hasAllInputs = (detail) => inputsFor(detail).length > 0 && inputsFor(detail).every((input) => input.received);
+    const hasBom = (detail) => Array.isArray(detail?.bom) && detail.bom.length > 0;
+    const searchText = (project, detail) => [project.name, project.client, project.opid, project.stage, project.phase, project.step, detail?.requirement, ...(detail?.bom || []).flatMap((row) => [row.partNumber, row.description]), ...(activityByProjectId[project.id] || []).map((event) => event.evidence)].filter(Boolean).join(' ').toLowerCase();
+    const matchesFocus = (project, detail) => {
+      const age = now - updateTime(project);
+      const evidence = `${project.step || ''} ${(activityByProjectId[project.id] || []).map((event) => event.evidence || '').join(' ')}`.toLowerCase();
+      if (dashboardFilters.focus === 'follow-up') return age > 7 * 86400000;
+      if (dashboardFilters.focus === 'waiting') return evidence.includes('waiting') || evidence.includes('awaiting');
+      if (dashboardFilters.focus === 'blocked') return evidence.includes('blocked') || project.state === 'On Hold';
+      if (dashboardFilters.focus === 'qualification') return project.stage === 'qualification';
+      if (dashboardFilters.focus === 'proposing') return project.phase === 'Proposing';
+      if (dashboardFilters.focus === 'execution') return project.phase === 'Execution';
+      if (dashboardFilters.focus === 'delivery') return project.stage === 'delivery';
+      if (dashboardFilters.focus === 'missing-inputs') return !hasAllInputs(detail);
+      if (dashboardFilters.focus === 'missing-bom') return !hasBom(detail);
+      if (dashboardFilters.focus === 'recent') return age <= 7 * 86400000;
+      return true;
+    };
+    const result = projects.filter((project) => {
+      const detail = detailsById[project.id] || {};
+      const age = now - updateTime(project);
+      const matchState = dashboardFilters.state === 'all' || project.state === dashboardFilters.state;
+      const matchStage = dashboardFilters.stage === 'all' || project.stage === dashboardFilters.stage;
+      const matchPhase = dashboardFilters.phase === 'all' || project.phase === dashboardFilters.phase;
+      const matchClient = dashboardFilters.client === 'all' || project.client === dashboardFilters.client;
+      const matchInputs = dashboardFilters.inputs === 'all' || (dashboardFilters.inputs === 'complete' ? hasAllInputs(detail) : !hasAllInputs(detail));
+      const matchContent = dashboardFilters.content === 'all' || (dashboardFilters.content === 'requirement' ? Boolean(detail.requirement?.trim()) : dashboardFilters.content === 'bom' ? hasBom(detail) : !hasBom(detail));
+      const matchAge = dashboardFilters.age === 'all' || age <= Number(dashboardFilters.age) * 86400000;
+      return matchState && matchStage && matchPhase && matchClient && matchInputs && matchContent && matchAge && matchesFocus(project, detail) && searchText(project, detail).includes(query.toLowerCase());
     });
-  }, [projects, filter, query]);
+    const workflowRank = { qualification: 0, bidding: 1, delivery: 2 };
+    return result.sort((left, right) => {
+      const leftDetail = detailsById[left.id] || {}; const rightDetail = detailsById[right.id] || {};
+      if (dashboardFilters.sort === 'oldest') return updateTime(left) - updateTime(right);
+      if (dashboardFilters.sort === 'newest') return right.id - left.id;
+      if (dashboardFilters.sort === 'created') return left.id - right.id;
+      if (dashboardFilters.sort === 'project-az') return left.name.localeCompare(right.name);
+      if (dashboardFilters.sort === 'client-az') return left.client.localeCompare(right.client);
+      if (dashboardFilters.sort === 'workflow') return (workflowRank[left.stage] - workflowRank[right.stage]) || left.name.localeCompare(right.name);
+      if (dashboardFilters.sort === 'inputs') return Number(hasAllInputs(leftDetail)) - Number(hasAllInputs(rightDetail));
+      return updateTime(right) - updateTime(left);
+    });
+  }, [dashboardFilters, document, projects, query]);
 
   const count = (state) =>
     state === 'All'
@@ -531,6 +658,17 @@ export default function App() {
       : projects.filter((p) => p.state === state).length;
 
   const tabs = ['All', ...PROJECT_STATES];
+  const clients = useMemo(() => [...new Set(projects.map((project) => project.client).filter(Boolean))].sort(), [projects]);
+  const activeFilterChips = [
+    dashboardFilters.focus !== 'all' && ['focus', dashboardFilters.focus.replaceAll('-', ' ')],
+    dashboardFilters.state !== 'all' && ['state', dashboardFilters.state],
+    dashboardFilters.stage !== 'all' && ['stage', STAGES[dashboardFilters.stage]?.label],
+    dashboardFilters.phase !== 'all' && ['phase', dashboardFilters.phase],
+    dashboardFilters.client !== 'all' && ['client', dashboardFilters.client],
+    dashboardFilters.inputs !== 'all' && ['inputs', dashboardFilters.inputs === 'complete' ? 'all inputs received' : 'missing inputs'],
+    dashboardFilters.content !== 'all' && ['content', dashboardFilters.content.replaceAll('-', ' ')],
+    dashboardFilters.age !== 'all' && ['age', `updated ${dashboardFilters.age}d`],
+  ].filter(Boolean);
   const detailId = route.startsWith('#/projects/') ? Number(route.split('/').pop()) : null;
   const detailProject = projects.find((project) => project.id === detailId);
 
@@ -598,7 +736,7 @@ export default function App() {
                 />
                 <kbd>Ctrl K</kbd>
               </div>
-              <button className="filter-btn">
+              <button className="filter-btn" onClick={() => setShowFilters(true)}>
                 <Icon name="filter" size={13} />
                 Filters
               </button>
@@ -621,10 +759,10 @@ export default function App() {
             {tabs.map((tab) => (
               <button
                 key={tab}
-                className={`filter-tab ${filter === tab ? 'active' : ''}`}
+                className={`filter-tab ${(tab === 'All' ? dashboardFilters.state === 'all' : dashboardFilters.state === tab) ? 'active' : ''}`}
                 role="tab"
-                aria-selected={filter === tab}
-                onClick={() => setFilter(tab)}
+                aria-selected={tab === 'All' ? dashboardFilters.state === 'all' : dashboardFilters.state === tab}
+                onClick={() => updateDashboardFilters({ ...dashboardFilters, state: tab === 'All' ? 'all' : tab })}
               >
                 {tab}
                 <span>{count(tab)}</span>
@@ -638,10 +776,17 @@ export default function App() {
         <div className="projects-section">
           <div className="section-label-row">
             <span className="section-label">
-              {filter === 'All' ? 'All projects' : `${filter} projects`}
+              {dashboardFilters.focus !== 'all' ? dashboardFilters.focus.replaceAll('-', ' ') : dashboardFilters.state === 'all' ? 'All projects' : `${dashboardFilters.state} projects`}
             </span>
             <span className="section-count">{filtered.length} shown</span>
           </div>
+
+          {activeFilterChips.length > 0 && (
+            <div className="active-filter-chips" aria-label="Active filters">
+              {activeFilterChips.map(([key, label]) => <button key={key} className="active-filter-chip" onClick={() => updateDashboardFilters({ ...dashboardFilters, [key]: 'all' })}>{label} <span>×</span></button>)}
+              <button className="clear-filter-chips" onClick={() => updateDashboardFilters(DEFAULT_DASHBOARD_FILTERS)}>Clear all</button>
+            </div>
+          )}
 
           <div className="project-list" role="list" aria-label="Project list">
             {filtered.length === 0 ? (
@@ -687,6 +832,16 @@ export default function App() {
           onExport={handleExport}
           onImport={handleImport}
           message={dataToolMessage}
+        />
+      )}
+
+      {showFilters && (
+        <FiltersDialog
+          filters={dashboardFilters}
+          clients={clients}
+          onChange={updateDashboardFilters}
+          onClear={() => updateDashboardFilters(DEFAULT_DASHBOARD_FILTERS)}
+          onClose={() => setShowFilters(false)}
         />
       )}
 

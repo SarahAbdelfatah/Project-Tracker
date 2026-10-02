@@ -7,7 +7,11 @@ export function createEmptyDocument() {
   return {
     schemaVersion: 1,
     metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    preferences: { theme: 'light', sidebarCollapsed: false },
+    preferences: {
+      theme: 'light',
+      sidebarCollapsed: false,
+      dashboard: { focus: 'all', state: 'all', stage: 'all', phase: 'all', client: 'all', inputs: 'all', content: 'all', age: 'all', sort: 'recent' },
+    },
     projects: [],
     projectDetailsById: {},
     activityByProjectId: {},
