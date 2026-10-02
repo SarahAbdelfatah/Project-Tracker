@@ -1,8 +1,11 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import {
   STAGES, BIDDING_PHASES, PROJECT_STATES,
-  loadProjects, saveProjects, generateId,
 } from './data/projects';
+import {
+  createEmptyDocument, createProject, exportTrackerBackup, importTrackerBackup,
+  loadTrackerDocument, readLegacyProjects, saveTrackerDocument,
+} from './data/tracker';
 import './styles.css';
 
 // ─── SVG icon set ─────────────────────────────────────────────────────────────
@@ -13,6 +16,7 @@ function Icon({ name, size = 16 }) {
     copy:       <><rect x="8" y="8" width="10" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h1" /></>,
     check:      <path d="M5 13l4 4L19 7" />,
     bell:       <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 22h4" /></>,
+    panel:      <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></>,
     chevron:    <path d="m9 18 6-6-6-6" />,
     arrowLeft:  <><path d="m14 6-6 6 6 6" /><path d="M8 12h12" /></>,
     filter:     <><path d="M4 6h16M7 12h10M10 18h4" /></>,
@@ -100,7 +104,7 @@ function ProjectCard({ project, onCopy, onOpen }) {
   );
 }
 
-function ProjectDetailShell({ project, onBack }) {
+function ProjectDetailShell({ project, onBack, onCopy, toast }) {
   return (
     <div className="app-shell detail-shell">
       <header className="topbar">
@@ -122,7 +126,14 @@ function ProjectDetailShell({ project, onBack }) {
           <h1 id="detail-project-title">{project.name}</h1>
           <dl className="detail-route-meta">
             <div><dt>Client / account</dt><dd>{project.client}</dd></div>
-            <div><dt>OPID</dt><dd>{project.opid}</dd></div>
+            <div>
+              <dt>OPID</dt>
+              <dd>
+                <button className="detail-opid-button" onClick={() => onCopy(project.opid)} title={`Copy ${project.opid}`} aria-label={`Copy OPID ${project.opid}`}>
+                  <span>{project.opid}</span><Icon name="copy" size={13} />
+                </button>
+              </dd>
+            </div>
             <div><dt>Last updated</dt><dd>{project.updated}</dd></div>
           </dl>
         </section>
@@ -130,6 +141,12 @@ function ProjectDetailShell({ project, onBack }) {
           <h2>Project details</h2>
           <p>The editable project workspace will be added in the next approved phases. Your dashboard data is unchanged.</p>
         </section>
+        {toast && (
+          <div className="toast" role="status" aria-live="polite">
+            <span className="toast-icon"><Icon name={toast.icon} size={13} /></span>
+            {toast.msg}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -320,15 +337,104 @@ function AddProjectDialog({ onClose, onCreate }) {
   );
 }
 
+function DataToolsDialog({ onClose, onExport, onImport, message }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="dialog data-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
+        <div className="dialog-header">
+          <h2 className="dialog-title" id="data-tools-title">Data & backups</h2>
+          <p className="dialog-desc">Export a portable backup or restore a previously exported tracker file.</p>
+        </div>
+        <div className="dialog-body data-tools-body">
+          <button className="data-tool-option" onClick={onExport}><strong>Export backup</strong><span>Save a readable JSON copy of your tracker.</span></button>
+          <button className="data-tool-option" onClick={onImport}><strong>Import backup</strong><span>Replace this tracker with a validated backup file.</span></button>
+          {message && <p className="data-tool-message" role="status">{message}</p>}
+        </div>
+        <div className="dialog-footer"><button className="btn-secondary" onClick={onClose}>Close</button></div>
+      </section>
+    </div>
+  );
+}
+
+function RecoveryDialog({ onStartFresh, onImport }) {
+  return (
+    <div className="modal-backdrop recovery-backdrop">
+      <section className="dialog recovery-dialog" role="alertdialog" aria-modal="true" aria-labelledby="recovery-title">
+        <div className="dialog-header">
+          <p className="dialog-eyebrow">Recovery needed</p>
+          <h2 className="dialog-title" id="recovery-title">Your tracker file could not be safely read</h2>
+          <p className="dialog-desc">The app did not load damaged data. Restore a valid exported backup or start a clean tracker.</p>
+        </div>
+        <div className="dialog-footer recovery-actions">
+          <button className="btn-secondary" onClick={onImport}>Import backup</button>
+          <button className="btn-primary" onClick={onStartFresh}>Start clean tracker</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // ─── Root app ──────────────────────────────────────────────────────────────────
 export default function App() {
-  // Load from localStorage on first render
-  const [projects, setProjects] = useState(() => loadProjects());
+  const [document, setDocument] = useState(null);
+  const [storage, setStorage] = useState(null);
+  const [recovery, setRecovery] = useState({ state: 'loading' });
+  const [saveState, setSaveState] = useState('loading');
   const [filter, setFilter]     = useState('All');
   const [query, setQuery]       = useState('');
   const [showAdd, setShowAdd]   = useState(false);
+  const [showDataTools, setShowDataTools] = useState(false);
+  const [dataToolMessage, setDataToolMessage] = useState('');
   const [toast, setToast]       = useState(null);
   const [route, setRoute]       = useState(() => window.location.hash);
+  const saveQueue = useRef(Promise.resolve());
+
+  const persistDocument = useCallback((nextDocument) => {
+    setDocument(nextDocument);
+    setSaveState('saving');
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(() => saveTrackerDocument(nextDocument))
+      .then((result) => {
+        setStorage(result.storage);
+        setSaveState('saved');
+      })
+      .catch(() => setSaveState('save-error'));
+    return saveQueue.current;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function initialise() {
+      try {
+        const result = await loadTrackerDocument();
+        if (!active) return;
+        if (!result.document) {
+          setRecovery(result.recovery);
+          setSaveState('recovery');
+          return;
+        }
+        let nextDocument = result.document;
+        const legacyProjects = result.isNew ? readLegacyProjects() : [];
+        if (legacyProjects.length) {
+          nextDocument = { ...nextDocument, projects: legacyProjects };
+          await saveTrackerDocument(nextDocument);
+        }
+        if (!active) return;
+        setDocument(nextDocument);
+        setStorage(result.storage);
+        setRecovery(result.recovery);
+        setSaveState('saved');
+      } catch {
+        if (active) {
+          setRecovery({ state: 'needs-recovery' });
+          setSaveState('recovery');
+        }
+      }
+    }
+    initialise();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const syncRoute = () => setRoute(window.location.hash);
@@ -336,10 +442,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
 
-  // Persist whenever projects change
-  useEffect(() => {
-    saveProjects(projects);
-  }, [projects]);
+  const projects = document?.projects || [];
 
   // Toast helper — auto‑dismisses after 2 s
   const showToast = useCallback((msg, icon = 'check') => {
@@ -359,13 +462,41 @@ export default function App() {
 
   // Create project
   const handleCreate = useCallback((form) => {
-    const newProject = { ...form, id: generateId(projects) };
-    const updated = [newProject, ...projects];
-    setProjects(updated);
+    if (!document) return;
+    persistDocument(createProject(document, form));
     setShowAdd(false);
     setFilter('All');
     showToast('Project created');
-  }, [projects, showToast]);
+  }, [document, persistDocument, showToast]);
+
+  const handleExport = useCallback(async () => {
+    const result = await exportTrackerBackup();
+    setDataToolMessage(result.cancelled ? (result.reason || 'Export cancelled.') : 'Backup exported successfully.');
+  }, []);
+
+  const handleImport = useCallback(async () => {
+    try {
+      const result = await importTrackerBackup();
+      if (result.document) {
+        setDocument(result.document);
+        setStorage(result.storage);
+        setRecovery({ state: 'healthy' });
+        setSaveState('saved');
+        setDataToolMessage('Backup restored successfully.');
+        setShowAdd(false);
+      } else {
+        setDataToolMessage(result.reason || 'Import cancelled.');
+      }
+    } catch {
+      setDataToolMessage('This backup could not be validated. Your current tracker was not changed.');
+    }
+  }, []);
+
+  const handleStartFresh = useCallback(() => {
+    const fresh = createEmptyDocument();
+    setRecovery({ state: 'healthy' });
+    persistDocument(fresh);
+  }, [persistDocument]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -394,7 +525,7 @@ export default function App() {
   };
 
   if (detailProject) {
-    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} />;
+    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} onCopy={copyOpid} toast={toast} />;
   }
 
   return (
@@ -407,54 +538,18 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
+          <span className={`save-indicator ${saveState}`} title={storage?.encrypted ? 'Encrypted local storage' : 'Local storage'}>
+            {saveState === 'saving' ? 'Saving…' : saveState === 'save-error' ? 'Save failed' : saveState === 'recovery' ? 'Recovery needed' : 'Saved locally'}
+          </span>
+          <button className="icon-btn" onClick={() => { setDataToolMessage(''); setShowDataTools(true); }} aria-label="Data and backups" title="Data and backups">
+            <Icon name="settings" size={16} />
+          </button>
           <button className="icon-btn" aria-label="Notifications">
             <Icon name="bell" size={16} />
           </button>
           <button className="avatar-btn" aria-label="Account menu">AE</button>
         </div>
       </header>
-
-      {/* ── Sidebar ────────────────────────────────────────────── */}
-      <nav className="sidebar" aria-label="Main navigation">
-        <p className="nav-section-label">Main</p>
-        <button className="nav-item active" aria-current="page">
-          <Icon name="folder" size={15} />
-          Projects
-          <span className="nav-badge">{projects.length}</span>
-        </button>
-        <button className="nav-item">
-          <Icon name="inbox" size={15} />
-          Inbox
-        </button>
-
-        <p className="nav-section-label" style={{ marginTop: 12 }}>Status</p>
-        {PROJECT_STATES.map((s) => (
-          <button
-            key={s}
-            className={`nav-item ${filter === s ? 'active' : ''}`}
-            onClick={() => setFilter(s)}
-          >
-            <span
-              className="nav-status-dot"
-              style={{
-                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                background: s === 'Active' ? 'var(--col-active)'
-                  : s === 'Closed' ? 'var(--col-closed)'
-                  : 'var(--col-hold)',
-              }}
-            />
-            {s}
-            <span className="nav-badge">{count(s)}</span>
-          </button>
-        ))}
-
-        <div className="sidebar-footer">
-          <button className="nav-item">
-            <Icon name="settings" size={15} />
-            Settings
-          </button>
-        </div>
-      </nav>
 
       {/* ── Main content ───────────────────────────────────────── */}
       <main className="main">
@@ -490,6 +585,7 @@ export default function App() {
                 className="new-project-btn"
                 onClick={() => setShowAdd(true)}
                 id="btn-new-project"
+                disabled={!document}
               >
                 <Icon name="plus" size={14} />
                 New project
@@ -515,12 +611,6 @@ export default function App() {
             ))}
           </div>
 
-          <div className="toolbar-gap" />
-
-          <button className="sort-btn">
-            <Icon name="sort" size={13} />
-            Sort
-          </button>
         </div>
 
         {/* Project list */}
@@ -568,6 +658,19 @@ export default function App() {
           onClose={() => setShowAdd(false)}
           onCreate={handleCreate}
         />
+      )}
+
+      {showDataTools && (
+        <DataToolsDialog
+          onClose={() => setShowDataTools(false)}
+          onExport={handleExport}
+          onImport={handleImport}
+          message={dataToolMessage}
+        />
+      )}
+
+      {recovery.state === 'needs-recovery' && (
+        <RecoveryDialog onStartFresh={handleStartFresh} onImport={handleImport} />
       )}
     </div>
   );
