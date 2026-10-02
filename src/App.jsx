@@ -14,6 +14,7 @@ function Icon({ name, size = 16 }) {
     check:      <path d="M5 13l4 4L19 7" />,
     bell:       <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 22h4" /></>,
     chevron:    <path d="m9 18 6-6-6-6" />,
+    arrowLeft:  <><path d="m14 6-6 6 6 6" /><path d="M8 12h12" /></>,
     filter:     <><path d="M4 6h16M7 12h10M10 18h4" /></>,
     sort:       <><path d="M3 6h18M6 12h12M9 18h6" /></>,
     folder:     <><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" /></>,
@@ -66,7 +67,7 @@ function StatusStrip({ project }) {
 }
 
 // ─── Individual project card ───────────────────────────────────────────────────
-function ProjectCard({ project, onCopy }) {
+function ProjectCard({ project, onCopy, onOpen }) {
   const stateKey = project.state?.toLowerCase().replace(' ', '-');
   return (
     <article className="project-card">
@@ -89,13 +90,48 @@ function ProjectCard({ project, onCopy }) {
         </div>
         <div className="card-badges">
           <span className={`state-badge ${stateKey}`}>{project.state}</span>
-          <button className="chevron-btn" aria-label={`Open ${project.name}`}>
+          <button className="chevron-btn" onClick={() => onOpen(project.id)} aria-label={`Open ${project.name}`}>
             <Icon name="chevron" size={14} />
           </button>
         </div>
       </div>
       <StatusStrip project={project} />
     </article>
+  );
+}
+
+function ProjectDetailShell({ project, onBack }) {
+  return (
+    <div className="app-shell detail-shell">
+      <header className="topbar">
+        <div className="topbar-left">
+          <img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Project Tracker" />
+          <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span>
+        </div>
+        <div className="topbar-right">
+          <button className="icon-btn" aria-label="Notifications"><Icon name="bell" size={16} /></button>
+          <button className="avatar-btn" aria-label="Account menu">AE</button>
+        </div>
+      </header>
+      <main className="detail-route-main">
+        <button className="back-to-projects" onClick={onBack}>
+          <Icon name="arrowLeft" size={15} /> Back to projects
+        </button>
+        <section className="detail-route-hero" aria-labelledby="detail-project-title">
+          <span className={`stage-pill ${project.stage}`}>{STAGES[project.stage]?.label || 'Project'}</span>
+          <h1 id="detail-project-title">{project.name}</h1>
+          <dl className="detail-route-meta">
+            <div><dt>Client / account</dt><dd>{project.client}</dd></div>
+            <div><dt>OPID</dt><dd>{project.opid}</dd></div>
+            <div><dt>Last updated</dt><dd>{project.updated}</dd></div>
+          </dl>
+        </section>
+        <section className="detail-route-placeholder" aria-label="Project detail foundation">
+          <h2>Project details</h2>
+          <p>The editable project workspace will be added in the next approved phases. Your dashboard data is unchanged.</p>
+        </section>
+      </main>
+    </div>
   );
 }
 
@@ -292,6 +328,13 @@ export default function App() {
   const [query, setQuery]       = useState('');
   const [showAdd, setShowAdd]   = useState(false);
   const [toast, setToast]       = useState(null);
+  const [route, setRoute]       = useState(() => window.location.hash);
+
+  useEffect(() => {
+    const syncRoute = () => setRoute(window.location.hash);
+    window.addEventListener('hashchange', syncRoute);
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
 
   // Persist whenever projects change
   useEffect(() => {
@@ -339,6 +382,20 @@ export default function App() {
       : projects.filter((p) => p.state === state).length;
 
   const tabs = ['All', ...PROJECT_STATES];
+  const detailId = route.startsWith('#/projects/') ? Number(route.split('/').pop()) : null;
+  const detailProject = projects.find((project) => project.id === detailId);
+
+  const openProject = (id) => {
+    window.location.hash = `/projects/${id}`;
+  };
+
+  const returnToProjects = () => {
+    window.location.hash = '';
+  };
+
+  if (detailProject) {
+    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} />;
+  }
 
   return (
     <div className="app-shell">
@@ -346,6 +403,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left">
           <img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Project Tracker" />
+          <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span>
         </div>
 
         <div className="topbar-right">
@@ -488,6 +546,7 @@ export default function App() {
                   key={project.id}
                   project={project}
                   onCopy={copyOpid}
+                  onOpen={openProject}
                 />
               ))
             )}

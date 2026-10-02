@@ -8,49 +8,49 @@
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
 
   /* Surface */
-  --bg-base:      #0e1014;
-  --bg-surface:   #14171d;
-  --bg-elevated:  #1a1e26;
-  --bg-hover:     #1f2430;
-  --bg-input:     #191c24;
-  --bg-modal:     #15181f;
+  --bg-base:      #f7f7f5;
+  --bg-surface:   #ffffff;
+  --bg-elevated:  #fbfbfa;
+  --bg-hover:     #f0f0ed;
+  --bg-input:     #ffffff;
+  --bg-modal:     #ffffff;
 
   /* Border */
-  --border-subtle: rgba(255,255,255,.06);
-  --border-default: rgba(255,255,255,.09);
-  --border-strong:  rgba(255,255,255,.14);
-  --border-focus:   rgba(99,179,237,.5);
+  --border-subtle: #ecece8;
+  --border-default: #ddddda;
+  --border-strong:  #c7c7c2;
+  --border-focus:   rgba(242,91,36,.45);
 
   /* Text */
-  --text-primary:   #e8eaf0;
-  --text-secondary: #8b91a0;
-  --text-tertiary:  #575e6e;
-  --text-disabled:  #3f4554;
+  --text-primary:   #20201e;
+  --text-secondary: #62625c;
+  --text-tertiary:  #898982;
+  --text-disabled:  #b2b2ab;
 
   /* Brand */
-  --brand:        #4f8ef7;
-  --brand-glow:   rgba(79,142,247,.18);
-  --brand-dim:    rgba(79,142,247,.12);
+  --brand:        #f25b24;
+  --brand-glow:   rgba(242,91,36,.18);
+  --brand-dim:    rgba(242,91,36,.10);
 
   /* Status colors */
-  --col-qual:       #e8a24a;
-  --col-qual-bg:    rgba(232,162,74,.1);
-  --col-bid:        #4f8ef7;
-  --col-bid-bg:     rgba(79,142,247,.1);
-  --col-del:        #4ec9a0;
-  --col-del-bg:     rgba(78,201,160,.1);
+  --col-qual:       #a15c16;
+  --col-qual-bg:    #fff3e4;
+  --col-bid:        #c64618;
+  --col-bid-bg:     #fff0ea;
+  --col-del:        #287f65;
+  --col-del-bg:     #e9f7f1;
 
-  --col-prop:       #a78bfa;
-  --col-prop-bg:    rgba(167,139,250,.1);
-  --col-exec:       #f97b6a;
-  --col-exec-bg:    rgba(249,123,106,.1);
+  --col-prop:       #a84622;
+  --col-prop-bg:    #fff0ea;
+  --col-exec:       #a84622;
+  --col-exec-bg:    #fff0ea;
 
-  --col-active:     #4ec9a0;
-  --col-active-bg:  rgba(78,201,160,.1);
-  --col-closed:     #5a6272;
-  --col-closed-bg:  rgba(90,98,114,.12);
-  --col-hold:       #f0c060;
-  --col-hold-bg:    rgba(240,192,96,.1);
+  --col-active:     #287f65;
+  --col-active-bg:  #e9f7f1;
+  --col-closed:     #6f6f68;
+  --col-closed-bg:  #f0f0ed;
+  --col-hold:       #a15c16;
+  --col-hold-bg:    #fff3e4;
 
   /* Radius */
   --r-sm:  5px;
@@ -60,10 +60,10 @@
   --r-pill: 999px;
 
   /* Shadow */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,.4);
-  --shadow-md:  0 4px 16px rgba(0,0,0,.45);
-  --shadow-lg:  0 12px 48px rgba(0,0,0,.6);
-  --shadow-card: 0 1px 0 rgba(255,255,255,.04) inset, 0 2px 8px rgba(0,0,0,.3);
+  --shadow-sm:  0 1px 3px rgba(32,32,30,.08);
+  --shadow-md:  0 5px 16px rgba(32,32,30,.10);
+  --shadow-lg:  0 16px 48px rgba(32,32,30,.18);
+  --shadow-card: 0 1px 0 rgba(255,255,255,.8) inset, 0 2px 8px rgba(32,32,30,.06);
 
   /* Sidebar */
   --sidebar-w: 220px;
@@ -121,7 +121,8 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-primary);
   white-space: nowrap;
 }
-.app-wordmark span { color: var(--brand); }
+.app-wordmark { line-height: 1.2; font-size: 9px; letter-spacing: .02em; color: var(--text-secondary); }
+.app-wordmark strong { display: inline-block; margin-top: 1px; color: var(--text-primary); font-size: 12px; letter-spacing: -.02em; }
 .app-mark { width: 25px; height: 25px; display: block; }
 
 .topbar-search, .page-search {
@@ -181,14 +182,14 @@ a { text-decoration: none; color: inherit; }
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4f8ef7, #7c3aed);
+  background: #20201e;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
   display: grid;
   place-items: center;
   letter-spacing: .02em;
-  box-shadow: 0 0 0 2px rgba(79,142,247,.25);
+  box-shadow: 0 0 0 2px var(--brand-dim);
   cursor: pointer;
 }
 
@@ -664,7 +665,7 @@ a { text-decoration: none; color: inherit; }
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0,0,0,.6);
+  background: rgba(32,32,30,.32);
   backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
@@ -793,3 +794,54 @@ a { text-decoration: none; color: inherit; }
 }
 .btn-primary:hover { opacity: .88; }
 .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Detail-route foundation ───────────────────────────────────── */
+.detail-shell { display: flex; flex-direction: column; background: var(--bg-base); }
+.detail-shell .topbar { min-height: var(--topbar-h); flex-shrink: 0; }
+.detail-route-main {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+.back-to-projects {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.back-to-projects:hover { color: var(--brand); }
+.detail-route-hero, .detail-route-placeholder {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+.detail-route-hero { padding: 26px 28px; border-left: 4px solid var(--brand); }
+.detail-route-hero h1 {
+  margin-top: 10px;
+  color: var(--text-primary);
+  font-size: clamp(24px, 3vw, 38px);
+  letter-spacing: -.045em;
+  line-height: 1.08;
+}
+.detail-route-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+.detail-route-meta div { border-left: 1px solid var(--border-subtle); padding-left: 16px; }
+.detail-route-meta dt { color: var(--text-tertiary); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.detail-route-meta dd { margin-top: 4px; color: var(--text-primary); font-size: 12px; font-weight: 700; }
+.detail-route-placeholder { margin-top: 16px; padding: 26px 28px; }
+.detail-route-placeholder h2 { font-size: 17px; letter-spacing: -.03em; }
+.detail-route-placeholder p { max-width: 600px; margin-top: 6px; color: var(--text-secondary); font-size: 12px; }
+
+@media (max-width: 680px) {
+  .detail-route-main { padding: 18px 16px 32px; }
+  .detail-route-hero, .detail-route-placeholder { padding: 20px; }
+  .detail-route-meta { grid-template-columns: 1fr; gap: 12px; }
+}
