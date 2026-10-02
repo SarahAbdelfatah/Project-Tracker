@@ -16,6 +16,8 @@ function Icon({ name, size = 16 }) {
     copy:       <><rect x="8" y="8" width="10" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h1" /></>,
     check:      <path d="M5 13l4 4L19 7" />,
     bell:       <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 22h4" /></>,
+    sun:        <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></>,
+    moon:       <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />,
     panel:      <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></>,
     chevron:    <path d="m9 18 6-6-6-6" />,
     arrowLeft:  <><path d="m14 6-6 6 6 6" /><path d="M8 12h12" /></>,
@@ -104,7 +106,7 @@ function ProjectCard({ project, onCopy, onOpen }) {
   );
 }
 
-function ProjectDetailShell({ project, onBack, onCopy, toast }) {
+function ProjectDetailShell({ project, onBack, onCopy, toast, theme, onToggleTheme }) {
   return (
     <div className="app-shell detail-shell">
       <header className="topbar">
@@ -113,6 +115,9 @@ function ProjectDetailShell({ project, onBack, onCopy, toast }) {
           <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span>
         </div>
         <div className="topbar-right">
+          <button className="icon-btn theme-toggle" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
+          </button>
           <button className="icon-btn" aria-label="Notifications"><Icon name="bell" size={16} /></button>
           <button className="avatar-btn" aria-label="Account menu">AE</button>
         </div>
@@ -443,6 +448,11 @@ export default function App() {
   }, []);
 
   const projects = document?.projects || [];
+  const theme = document?.preferences?.theme === 'dark' ? 'dark' : 'light';
+
+  useEffect(() => {
+    globalThis.document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   // Toast helper — auto‑dismisses after 2 s
   const showToast = useCallback((msg, icon = 'check') => {
@@ -498,6 +508,14 @@ export default function App() {
     persistDocument(fresh);
   }, [persistDocument]);
 
+  const toggleTheme = useCallback(() => {
+    if (!document) return;
+    persistDocument({
+      ...document,
+      preferences: { ...document.preferences, theme: theme === 'dark' ? 'light' : 'dark' },
+    });
+  }, [document, persistDocument, theme]);
+
   // Filtered list
   const filtered = useMemo(() => {
     return projects.filter((p) => {
@@ -525,7 +543,7 @@ export default function App() {
   };
 
   if (detailProject) {
-    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} onCopy={copyOpid} toast={toast} />;
+    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} onCopy={copyOpid} toast={toast} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   return (
@@ -543,6 +561,9 @@ export default function App() {
           </span>
           <button className="icon-btn" onClick={() => { setDataToolMessage(''); setShowDataTools(true); }} aria-label="Data and backups" title="Data and backups">
             <Icon name="settings" size={16} />
+          </button>
+          <button className="icon-btn theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
           </button>
           <button className="icon-btn" aria-label="Notifications">
             <Icon name="bell" size={16} />
