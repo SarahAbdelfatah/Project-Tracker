@@ -28,6 +28,12 @@ function Icon({ name, size = 16 }) {
     inbox:      <><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></>,
     settings:   <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
     x:          <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
+    trash:      <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" /></>,
+    expand:     <><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7" /></>,
+    calendar:   <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
+    edit:       <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></>,
+    help:       <><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 1 1 3.4 2.2c-.8.4-1.2.9-1.2 1.8" /><path d="M12 17h.01" /></>,
+    note:       <><path d="M5 3h11l3 3v15H5Z" /><path d="M8 8h7M8 12h7M8 16h4" /><path d="m15 3 1 4 3-1" /></>,
   };
   return (
     <svg
@@ -43,6 +49,35 @@ function Icon({ name, size = 16 }) {
       {paths[name]}
     </svg>
   );
+}
+
+const DEFAULT_PROJECT_INPUTS = [
+  'Single-line diagram', 'Critical load schedule', 'Electrical room layout', 'Required backup runtime', 'Site photos',
+];
+
+function emptyProjectDetail(project) {
+  return {
+    created: project?.created || project?.updated || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    requirement: '',
+    requirementFollowUp: '',
+    workflow: {},
+    inputs: DEFAULT_PROJECT_INPUTS.map((label) => ({ id: label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'), label, received: false, status: 'Awaiting' })),
+    bom: [],
+  };
+}
+
+function detailFor(project, detailsById) {
+  const saved = detailsById?.[project.id];
+  const fallback = emptyProjectDetail(project);
+  const savedInputs = Array.isArray(saved?.inputs) ? saved.inputs : [];
+  const missingInputs = fallback.inputs.filter((candidate) => !savedInputs.some((input) => input.label === candidate.label));
+  return {
+    ...fallback,
+    ...(saved || {}),
+    inputs: savedInputs.length ? [...savedInputs, ...missingInputs] : fallback.inputs,
+    bom: Array.isArray(saved?.bom) ? saved.bom : [],
+    workflow: saved?.workflow && typeof saved.workflow === 'object' ? saved.workflow : {},
+  };
 }
 
 // ─── Status strip on each card ────────────────────────────────────────────────
@@ -114,55 +149,158 @@ function ProjectCard({ project, onCopy, onOpen }) {
   );
 }
 
-function ProjectDetailShell({ project, onBack, onCopy, toast, theme, onToggleTheme }) {
-  return (
-    <div className="app-shell detail-shell">
-      <header className="topbar">
-        <div className="topbar-left">
-          <img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Project Tracker" />
-          <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span>
-        </div>
-        <div className="topbar-right">
-          <button className="icon-btn theme-toggle" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
-          </button>
-          <button className="icon-btn" aria-label="Notifications"><Icon name="bell" size={16} /></button>
-          <button className="avatar-btn" aria-label="Account menu">AE</button>
-        </div>
-      </header>
-      <main className="detail-route-main">
-        <button className="back-to-projects" onClick={onBack}>
-          <Icon name="arrowLeft" size={15} /> Back to projects
-        </button>
-        <section className="detail-route-hero" aria-labelledby="detail-project-title">
-          <span className={`stage-pill ${project.stage}`}>{STAGES[project.stage]?.label || 'Project'}</span>
-          <h1 id="detail-project-title">{project.name}</h1>
-          <dl className="detail-route-meta">
-            <div><dt>Client / account</dt><dd>{project.client}</dd></div>
-            <div>
-              <dt>OPID</dt>
-              <dd>
-                <button className="detail-opid-button" onClick={() => onCopy(project.opid)} title={`Copy ${project.opid}`} aria-label={`Copy OPID ${project.opid}`}>
-                  <span>{project.opid}</span><Icon name="copy" size={13} />
-                </button>
-              </dd>
-            </div>
-            <div><dt>Last updated</dt><dd>{project.updated}</dd></div>
-          </dl>
-        </section>
-        <section className="detail-route-placeholder" aria-label="Project detail foundation">
-          <h2>Project details</h2>
-          <p>The editable project workspace will be added in the next approved phases. Your dashboard data is unchanged.</p>
-        </section>
-        {toast && (
-          <div className="toast" role="status" aria-live="polite">
-            <span className="toast-icon"><Icon name={toast.icon} size={13} /></span>
-            {toast.msg}
-          </div>
-        )}
-      </main>
+function RequirementExpandDialog({ detail, onChange, onClose }) {
+  const [draft, setDraft] = useState({ requirement: detail.requirement, requirementFollowUp: detail.requirementFollowUp || '' });
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-requirement-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-requirement-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-requirement-title">Project requirement</h2><p className="dialog-desc">Full note view</p></div><div className="dialog-body"><textarea autoFocus maxLength={10000} value={draft.requirement} onChange={(event) => setDraft({ ...draft, requirement: event.target.value })} aria-label="Expanded project requirement" /><span className="ref-character-count">{draft.requirement.length.toLocaleString()} / 10,000</span><textarea className="followup" maxLength={5000} value={draft.requirementFollowUp} onChange={(event) => setDraft({ ...draft, requirementFollowUp: event.target.value })} aria-label="Expanded requirement follow-up" /></div><div className="dialog-footer"><button className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary" onClick={() => { onChange(draft, 'Updated project requirement'); onClose(); }}>Save note</button></div></section></div>;
+}
+
+function RequirementCard({ detail, onChange }) {
+  const noteRef = useRef(null);
+  const followUpRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const check = () => setOverflows([noteRef.current, followUpRef.current].some((element) => element && (element.scrollHeight > element.clientHeight + 2 || element.scrollWidth > element.clientWidth + 2)));
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [detail.requirement, detail.requirementFollowUp]);
+  return <section className="ref-card ref-requirement-card">
+    <div className="ref-card-title-row"><div><h2>Project requirement</h2><p>Quick in-call reminder</p></div><button className="ref-note-button ref-expand-button" onClick={() => setExpanded(true)} aria-label="Open full project requirement editor" title="Open full editor"><Icon name={overflows ? 'expand' : 'note'} size={overflows ? 17 : 18} /></button></div>
+    <textarea ref={noteRef} wrap="soft" maxLength={10000} className="ref-requirement-main" value={detail.requirement} onChange={(event) => onChange({ requirement: event.target.value }, null)} onBlur={(event) => onChange({ requirement: event.target.value }, 'Updated requirement note')} placeholder="Add the project requirement…" aria-label="Project requirement" />
+    <textarea ref={followUpRef} wrap="soft" maxLength={5000} className="ref-requirement-followup" value={detail.requirementFollowUp || ''} onChange={(event) => onChange({ requirementFollowUp: event.target.value }, null)} onBlur={(event) => onChange({ requirementFollowUp: event.target.value }, 'Updated requirement follow-up')} placeholder="Add a follow-up note…" aria-label="Requirement follow-up" />
+    {expanded && <RequirementExpandDialog detail={detail} onChange={onChange} onClose={() => setExpanded(false)} />}
+  </section>;
+}
+
+function InputsCard({ inputs, onChange }) {
+  const updateInput = (id, patch) => onChange(inputs.map((input) => input.id === id ? { ...input, ...patch } : input));
+  return <section className="ref-card ref-inputs-card">
+    <div className="ref-card-title-row"><div><h2>Project inputs</h2><p>{inputs.filter((input) => input.received).length} of {inputs.length} received</p></div><button className="ref-outline-button" onClick={() => onChange([...inputs, { id: `input-${Date.now()}`, label: 'New project input', received: false, status: 'Not provided' }])}><Icon name="plus" size={14} /> Add item</button></div>
+    <div className="ref-input-list">{inputs.map((input) => <label className="ref-input-row" key={input.id}>
+      <input type="checkbox" checked={Boolean(input.received)} onChange={(event) => updateInput(input.id, { received: event.target.checked, status: event.target.checked ? 'Received' : 'Not provided' })} />
+      <input className="ref-input-label" value={input.label} onChange={(event) => updateInput(input.id, { label: event.target.value })} aria-label="Project input label" />
+      <span className={input.received ? 'received' : ''}>{input.received ? 'Received' : input.status || 'Not provided'}</span>
+    </label>)}</div>
+  </section>;
+}
+
+function BomRowsTable({ rows, onUpdate, onRemove, expanded = false }) {
+  return <div className={`ref-bom-scroll ${expanded ? 'expanded' : ''}`}><table><thead><tr><th aria-label="Row actions" /><th>Part number</th><th>Material description</th><th>Qty</th><th>Notes / status</th></tr></thead><tbody>{rows.map((row) => <tr className={row.isNew ? 'ref-new-bom-row' : ''} key={row.id}><td><button className="ref-row-delete" onClick={() => onRemove(row.id)} aria-label={`Delete BOM row ${row.partNumber || ''}`}><Icon name="trash" size={14} /></button></td><td><input value={row.partNumber} onChange={(event) => onUpdate(row.id, 'partNumber', event.target.value)} /></td><td><input value={row.description} onChange={(event) => onUpdate(row.id, 'description', event.target.value)} /></td><td><input value={row.quantity} onChange={(event) => onUpdate(row.id, 'quantity', event.target.value)} /></td><td><input value={row.notes} onChange={(event) => onUpdate(row.id, 'notes', event.target.value)} /></td></tr>)}</tbody></table>{!rows.length && <p className="ref-bom-empty">Add a row or paste a tab-separated range from Excel.</p>}</div>;
+}
+
+function BomExpandDialog({ rows, onChange, onClose }) {
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [paste, setPaste] = useState('');
+  const updateRow = (id, key, value) => onChange(rows.map((row) => row.id === id ? { ...row, [key]: value } : row), false);
+  const removeRow = (id) => onChange(rows.filter((row) => row.id !== id), true);
+  const addRow = () => onChange([...rows, { id: `bom-${Date.now()}`, partNumber: '', description: '', quantity: '', notes: '', isNew: true }], true);
+  const applyPaste = () => {
+    const parsed = paste.split(/\r?\n/).filter(Boolean).map((line, index) => {
+      const [partNumber = '', description = '', quantity = '', notes = ''] = line.split('\t');
+      return { id: `bom-${Date.now()}-${index}`, partNumber: partNumber.trim(), description: description.trim(), quantity: quantity.trim(), notes: notes.trim(), isNew: true };
+    });
+    if (parsed.length) onChange([...rows, ...parsed], true);
+    setPaste(''); setPasteOpen(false);
+  };
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-bom-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-bom-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-bom-title">Proposed BOM</h2><p className="dialog-desc">Expanded table view</p></div><div className="dialog-body ref-bom-dialog-body"><div className="ref-bom-dialog-actions"><button className="ref-outline-button" onClick={() => setPasteOpen((open) => !open)}><Icon name="copy" size={14} /> Paste from Excel</button><button className="ref-dark-button" onClick={addRow}><Icon name="plus" size={14} /> Add row</button></div>{pasteOpen && <div className="ref-paste-row"><textarea autoFocus value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'Part number\tDescription\tQty\tNotes'} /><button className="ref-dark-button" onClick={applyPaste}>Add pasted rows</button></div>}<BomRowsTable rows={rows} onUpdate={updateRow} onRemove={removeRow} expanded /></div><div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Done</button></div></section></div>;
+}
+
+function BomCard({ rows, onChange }) {
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const updateRow = (id, key, value) => onChange(rows.map((row) => row.id === id ? { ...row, [key]: value } : row), false);
+  const removeRow = (id) => onChange(rows.filter((row) => row.id !== id), true);
+  const addRow = () => onChange([...rows, { id: `bom-${Date.now()}`, partNumber: '', description: '', quantity: '', notes: '', isNew: true }], true);
+  const applyPaste = () => {
+    const parsed = paste.split(/\r?\n/).filter(Boolean).map((line, index) => {
+      const [partNumber = '', description = '', quantity = '', notes = ''] = line.split('\t');
+      return { id: `bom-${Date.now()}-${index}`, partNumber: partNumber.trim(), description: description.trim(), quantity: quantity.trim(), notes: notes.trim(), isNew: true };
+    });
+    if (parsed.length) onChange([...rows, ...parsed], true);
+    setPaste(''); setPasteOpen(false);
+  };
+  return <section className="ref-card ref-bom-card">
+    <div className="ref-bom-header"><div><h2>Proposed BOM</h2><p>Paste rows directly from Excel · tab and newline friendly</p></div><div><button className="ref-bom-expand-button" onClick={() => setExpanded(true)} aria-label="Expand proposed BOM" title="Open expanded BOM"><Icon name="expand" size={15} /></button><button className="ref-outline-button" onClick={() => setPasteOpen((open) => !open)}><Icon name="copy" size={14} /> Paste from Excel</button><button className="ref-dark-button" onClick={addRow}><Icon name="plus" size={14} /> Add row</button></div></div>
+    {pasteOpen && <div className="ref-paste-row"><textarea autoFocus value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'Part number\tDescription\tQty\tNotes'} /><button className="ref-dark-button" onClick={applyPaste}>Add pasted rows</button></div>}
+    <BomRowsTable rows={rows} onUpdate={updateRow} onRemove={removeRow} />
+    {expanded && <BomExpandDialog rows={rows} onChange={onChange} onClose={() => setExpanded(false)} />}
+  </section>;
+}
+
+function StepDetailsDialog({ step, entry, onSave, onClose }) {
+  const [date, setDate] = useState(entry?.date || new Date().toISOString().slice(0, 10));
+  const [specs, setSpecs] = useState(entry?.specs || '');
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-step-dialog" role="dialog" aria-modal="true" aria-labelledby="step-dialog-title"><div className="dialog-header"><h2 className="dialog-title" id="step-dialog-title">{step}</h2><p className="dialog-desc">Specifications are optional. The date defaults to today and can be corrected.</p></div><div className="dialog-body"><div className="field-group"><label className="field-label" htmlFor="step-update-date">Update date</label><input id="step-update-date" className="field-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="field-group"><label className="field-label" htmlFor="step-specs">Specifications</label><textarea id="step-specs" className="field-input ref-specs-input" value={specs} onChange={(event) => setSpecs(event.target.value)} placeholder="Add free-text specifications…" /></div></div><div className="dialog-footer"><button className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary" onClick={() => { onSave({ date, specs }); onClose(); }}>Save</button></div></section></div>;
+}
+
+function ProjectStatusCard({ project, details, onWorkflowChange }) {
+  const stageIndex = ['qualification', 'bidding', 'delivery'].indexOf(project.stage);
+  const phases = Object.entries(BIDDING_PHASES);
+  const allSteps = phases.flatMap(([phase, steps]) => steps.map((step) => ({ phase, step })));
+  const currentStepIndex = allSteps.findIndex(({ step }) => step === project.step);
+  const [editingStep, setEditingStep] = useState(null);
+  const fallbackState = (index) => {
+    if (project.stage === 'delivery') return 'complete';
+    if (project.stage !== 'bidding') return 'upcoming';
+    return index < currentStepIndex ? 'complete' : index === currentStepIndex ? 'current' : 'upcoming';
+  };
+  const stepState = (step, index) => details.workflow?.[step]?.status || fallbackState(index);
+  const canActivate = (index) => stepState(allSteps[index].step, index) === 'upcoming' && (index === 0 || stepState(allSteps[index - 1].step, index - 1) === 'complete') && !allSteps.some(({ step }, stepIndex) => stepState(step, stepIndex) === 'current');
+  const formatDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(`${value}T12:00:00`);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const today = () => new Date().toISOString().slice(0, 10);
+  let offset = 0;
+  return <section className="ref-card ref-status-card">
+    <div className="ref-status-header"><div><p>Status / evidence</p><h2>Project status</h2></div><div><span>Last updated</span><strong>{project.updated}</strong></div></div>
+    <div className="ref-timeline">
+      <div className={`ref-major-step ${stageIndex > 0 ? 'complete' : 'current'}`}><span><Icon name="check" size={15} /></span><div><h3>Qualification stage</h3><p>{stageIndex > 0 ? 'Completed' : 'Current'} · {project.updated}</p></div>{stageIndex > 0 && <b>Completed</b>}</div>
+      <div className={`ref-major-step ${project.stage === 'bidding' ? 'current' : stageIndex > 1 ? 'complete' : 'upcoming'}`}><span><Icon name="note" size={15} /></span><div><h3>Bidding Stage</h3><p>{project.stage === 'bidding' ? 'Current' : stageIndex > 1 ? 'Completed' : 'Upcoming'} · {project.updated}</p></div>{project.stage === 'bidding' && <b>Current</b>}</div>
+      <div className="ref-phase-tree">{phases.map(([phase, steps]) => {
+        const start = offset; offset += steps.length;
+        return <div className="ref-phase" key={phase}><h4><i />{phase}</h4>{steps.map((step, index) => { const absoluteIndex = start + index; const state = stepState(step, absoluteIndex); const entry = details.workflow?.[step] || {}; const date = formatDate(entry.date) || (state !== 'upcoming' ? project.updated : ''); return <div className={`ref-substep ${state}`} key={step}><span>{state === 'complete' ? <Icon name="check" size={11} /> : state === 'current' ? <Icon name="note" size={11} /> : ''}</span><div className="ref-step-content"><div><strong>{step}</strong><p>{state === 'complete' ? 'Completed' : state === 'current' ? 'Current' : 'Upcoming'}{date ? ` · ${date}` : ''}</p></div><div className="ref-step-actions">{canActivate(absoluteIndex) && <button className="ref-activate-step" onClick={() => onWorkflowChange(phase, step, { status: 'current', date: today() }, { stage: 'bidding', phase, step }, `Activated ${step}`)}><Icon name="plus" size={11} /> Activate</button>}{state === 'current' && <button className="ref-complete-step" onClick={() => onWorkflowChange(phase, step, { status: 'complete', date: today() }, null, `Completed ${step}`)}><Icon name="check" size={11} /> Complete</button>}{state !== 'upcoming' && <div className="ref-step-specs">{entry.specs && <p className="ref-specs-content">{entry.specs}</p>}<button className="ref-specs-trigger" onClick={() => setEditingStep({ phase, step, entry })} aria-label={entry.specs ? `Edit specifications for ${step}` : `Add specifications for ${step}`}>{entry.specs ? 'Edit specs…' : 'Add specs…'}</button></div>}</div></div></div>; })}</div>;
+      })}</div>
+      <div className={`ref-major-step delivery ${project.stage === 'delivery' ? 'current' : 'upcoming'}`}><span /><div><h3>Delivery Stage</h3><p>{project.stage === 'delivery' ? 'Current' : 'Upcoming'}</p></div></div>
     </div>
-  );
+    {editingStep && <StepDetailsDialog step={editingStep.step} entry={details.workflow?.[editingStep.step] || editingStep.entry} onClose={() => setEditingStep(null)} onSave={(patch) => onWorkflowChange(editingStep.phase, editingStep.step, patch, null, `Updated ${editingStep.step} specifications`)} />}
+  </section>;
+}
+
+function EditProjectDialog({ project, onSave, onClose }) {
+  const [draft, setDraft] = useState({ name: project.name, client: project.client, opid: project.opid });
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><form className="dialog" onSubmit={(event) => { event.preventDefault(); onSave({ ...draft, opid: draft.opid.toUpperCase() }); onClose(); }}><div className="dialog-header"><h2 className="dialog-title">Edit project</h2></div><div className="dialog-body"><div className="field-group"><label className="field-label">Project name</label><input className="field-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div><div className="two-col"><div className="field-group"><label className="field-label">Client / account</label><input className="field-input" value={draft.client} onChange={(event) => setDraft({ ...draft, client: event.target.value })} /></div><div className="field-group"><label className="field-label">OPID</label><input className="field-input" value={draft.opid} onChange={(event) => setDraft({ ...draft, opid: event.target.value })} /></div></div></div><div className="dialog-footer"><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary">Save changes</button></div></form></div>;
+}
+
+function ProjectDetailShell({ project, details, theme, onThemeToggle, onBack, onCopy, toast, onProjectChange, onDetailChange, onWorkflowChange }) {
+  const [editing, setEditing] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+  const currentStatus = project.step ? `${project.step} current` : `${STAGES[project.stage]?.label || 'Project'} current`;
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const closeOutside = (event) => { if (!accountRef.current?.contains(event.target)) setAccountOpen(false); };
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setAccountOpen(false); };
+    globalThis.document.addEventListener('pointerdown', closeOutside);
+    globalThis.document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      globalThis.document.removeEventListener('pointerdown', closeOutside);
+      globalThis.document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [accountOpen]);
+  return <div className="app-shell ref-detail-shell">
+    <header className="topbar ref-topbar"><div className="topbar-left"><img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Project Tracker" /><span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span></div><div className="topbar-right"><button className="icon-btn" aria-label="Help"><Icon name="help" size={17} /></button><button className="icon-btn theme-toggle" onClick={onThemeToggle} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} /></button><button className="icon-btn ref-bell" aria-label="Notifications"><Icon name="bell" size={16} /><i /></button><div className="ref-account" ref={accountRef}><button className="ref-account-trigger" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-controls="detail-account-menu"><span className="avatar-btn">AM</span><Icon name="chevronDown" size={14} /></button>{accountOpen && <div className="ref-account-menu" id="detail-account-menu" role="menu"><div className="ref-account-identity"><span className="avatar-btn">AM</span><div><strong>AM</strong><small>Application engineer</small></div></div><button role="menuitem" onClick={() => { onThemeToggle(); setAccountOpen(false); }}><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />{theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}</button><button role="menuitem" onClick={() => { setAccountOpen(false); onBack(); }}><Icon name="arrowLeft" size={15} />All projects</button></div>}</div></div></header>
+    <main className="ref-detail-main">
+      <button className="ref-back" onClick={onBack}><Icon name="arrowLeft" size={15} /> Back to projects</button>
+      <section className="ref-hero"><div className="ref-hero-title"><div><span className={`stage-pill ${project.stage}`}>{STAGES[project.stage]?.label || 'Project'}</span><em>{currentStatus}</em></div><span className="ref-editable-value"><h1>{project.name}</h1><button className="ref-inline-edit" onClick={() => setEditing(true)} aria-label="Edit project name"><Icon name="edit" size={13} /></button></span></div><dl><div><dt>Client / account</dt><dd><span>{project.client}</span><button className="ref-inline-edit" onClick={() => setEditing(true)} aria-label="Edit client account"><Icon name="edit" size={12} /></button></dd></div><div><dt>OPID</dt><dd>{project.opid}<button onClick={() => onCopy(project.opid)} aria-label={`Copy OPID ${project.opid}`}><Icon name="copy" size={13} /></button><button className="ref-inline-edit" onClick={() => setEditing(true)} aria-label="Edit OPID"><Icon name="edit" size={12} /></button></dd></div><div><dt>Created</dt><dd>{details.created}</dd></div></dl></section>
+      <div className="ref-detail-grid"><div className="ref-left-column"><div className="ref-upper-row"><InputsCard inputs={details.inputs} onChange={(inputs) => onDetailChange({ inputs }, 'Updated project inputs')} /><RequirementCard detail={details} onChange={onDetailChange} /></div><BomCard rows={details.bom} onChange={(bom, audit) => onDetailChange({ bom }, audit ? 'Updated proposed BOM' : null)} /></div><ProjectStatusCard project={project} details={details} onWorkflowChange={onWorkflowChange} /></div>
+      {toast && <div className="toast" role="status" aria-live="polite"><span className="toast-icon"><Icon name={toast.icon} size={13} /></span>{toast.msg}</div>}
+    </main>
+    {editing && <EditProjectDialog project={project} onClose={() => setEditing(false)} onSave={(patch) => onProjectChange(patch, 'Updated project details')} />}
+  </div>;
 }
 
 // ─── Add / New project dialog ──────────────────────────────────────────────────
@@ -558,11 +696,17 @@ export default function App() {
   // Create project
   const handleCreate = useCallback((form) => {
     if (!document) return;
-    persistDocument(createProject(document, form));
+    const nextDocument = createProject(document, form);
+    persistDocument({
+      ...nextDocument,
+      preferences: {
+        ...nextDocument.preferences,
+        dashboard: { ...DEFAULT_DASHBOARD_FILTERS, ...(nextDocument.preferences?.dashboard || {}), focus: 'all', state: 'all' },
+      },
+    });
     setShowAdd(false);
-    updateDashboardFilters({ ...dashboardFilters, focus: 'all', state: 'all' });
     showToast('Project created');
-  }, [dashboardFilters, document, persistDocument, showToast, updateDashboardFilters]);
+  }, [document, persistDocument, showToast]);
 
   const handleExport = useCallback(async () => {
     const result = await exportTrackerBackup();
@@ -600,6 +744,50 @@ export default function App() {
       preferences: { ...document.preferences, theme: theme === 'dark' ? 'light' : 'dark' },
     });
   }, [document, persistDocument, theme]);
+
+  const addActivity = useCallback((nextDocument, projectId, action) => {
+    if (!action) return nextDocument;
+    const now = new Date();
+    const event = { id: `activity-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`, action, timestamp: now.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) };
+    return { ...nextDocument, activityByProjectId: { ...nextDocument.activityByProjectId, [projectId]: [event, ...(nextDocument.activityByProjectId?.[projectId] || [])] } };
+  }, []);
+
+  const updateProjectDetail = useCallback((projectId, patch, action) => {
+    if (!document) return;
+    const project = document.projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const next = {
+      ...document,
+      projectDetailsById: { ...document.projectDetailsById, [projectId]: { ...detailFor(project, document.projectDetailsById), ...patch } },
+    };
+    persistDocument(addActivity(next, projectId, action));
+  }, [addActivity, document, persistDocument]);
+
+  const updateProjectSummary = useCallback((projectId, patch, action) => {
+    if (!document) return;
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const next = { ...document, projects: document.projects.map((item) => item.id === projectId ? { ...item, ...patch, updated: today } : item) };
+    persistDocument(addActivity(next, projectId, action));
+  }, [addActivity, document, persistDocument]);
+
+  const updateWorkflowStep = useCallback((projectId, phase, step, stepPatch, projectPatch, action) => {
+    if (!document) return;
+    const project = document.projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const currentDetail = detailFor(project, document.projectDetailsById);
+    const next = {
+      ...document,
+      projects: projectPatch ? document.projects.map((item) => item.id === projectId ? { ...item, ...projectPatch, updated: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } : item) : document.projects,
+      projectDetailsById: {
+        ...document.projectDetailsById,
+        [projectId]: {
+          ...currentDetail,
+          workflow: { ...currentDetail.workflow, [step]: { ...(currentDetail.workflow?.[step] || {}), ...stepPatch, phase } },
+        },
+      },
+    };
+    persistDocument(addActivity(next, projectId, action));
+  }, [addActivity, document, persistDocument]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -681,7 +869,7 @@ export default function App() {
   };
 
   if (detailProject) {
-    return <ProjectDetailShell project={detailProject} onBack={returnToProjects} onCopy={copyOpid} toast={toast} theme={theme} onToggleTheme={toggleTheme} />;
+    return <ProjectDetailShell project={detailProject} details={detailFor(detailProject, document?.projectDetailsById)} theme={theme} onThemeToggle={toggleTheme} onBack={returnToProjects} onCopy={copyOpid} toast={toast} onProjectChange={(patch, action) => updateProjectSummary(detailProject.id, patch, action)} onDetailChange={(patch, action) => updateProjectDetail(detailProject.id, patch, action)} onWorkflowChange={(phase, step, stepPatch, projectPatch, action) => updateWorkflowStep(detailProject.id, phase, step, stepPatch, projectPatch, action)} />;
   }
 
   return (

@@ -51,6 +51,66 @@ function validateProject(project, index, ids) {
   };
 }
 
+function validateProjectDetails(value, validIds) {
+  if (!isPlainObject(value)) return {};
+  const output = {};
+  for (const [rawId, detail] of Object.entries(value)) {
+    const id = Number(rawId);
+    if (!validIds.has(id) || !isPlainObject(detail)) continue;
+    const inputs = Array.isArray(detail.inputs) ? detail.inputs.slice(0, 100).map((input, index) => ({
+      id: text(input?.id, `Input ${index + 1} ID`, { max: 120 }) || `input-${index + 1}`,
+      label: text(input?.label, `Input ${index + 1} label`, { max: 300 }) || 'Project input',
+      received: Boolean(input?.received),
+      status: text(input?.status, `Input ${index + 1} status`, { max: 120 }),
+    })) : [];
+    const bom = Array.isArray(detail.bom) ? detail.bom.slice(0, 2000).map((row, index) => ({
+      id: text(row?.id, `BOM row ${index + 1} ID`, { max: 120 }) || `bom-${index + 1}`,
+      partNumber: text(row?.partNumber, `BOM row ${index + 1} part number`, { max: 180 }),
+      description: text(row?.description, `BOM row ${index + 1} description`, { max: 1000 }),
+      quantity: text(row?.quantity, `BOM row ${index + 1} quantity`, { max: 80 }),
+      notes: text(row?.notes, `BOM row ${index + 1} notes`, { max: 1000 }),
+      isNew: Boolean(row?.isNew),
+    })) : [];
+    const workflow = {};
+    if (isPlainObject(detail.workflow)) {
+      for (const [step, entry] of Object.entries(detail.workflow).slice(0, 100)) {
+        if (!isPlainObject(entry)) continue;
+        const cleanStep = text(step, 'Workflow step', { max: 180 });
+        if (!cleanStep) continue;
+        workflow[cleanStep] = {
+          status: ['upcoming', 'current', 'complete'].includes(entry.status) ? entry.status : 'upcoming',
+          date: text(entry.date, `${cleanStep} date`, { max: 40 }),
+          specs: text(entry.specs, `${cleanStep} specifications`, { max: 10000 }),
+        };
+      }
+    }
+    output[id] = {
+      created: text(detail.created, 'Project created date', { max: 120 }),
+      requirement: text(detail.requirement, 'Project requirement', { max: 10000 }),
+      requirementFollowUp: text(detail.requirementFollowUp, 'Project requirement follow-up', { max: 5000 }),
+      inputs,
+      bom,
+      workflow,
+    };
+  }
+  return output;
+}
+
+function validateActivity(value, validIds) {
+  if (!isPlainObject(value)) return {};
+  const output = {};
+  for (const [rawId, events] of Object.entries(value)) {
+    const id = Number(rawId);
+    if (!validIds.has(id) || !Array.isArray(events)) continue;
+    output[id] = events.slice(0, 5000).filter(isPlainObject).map((event, index) => ({
+      id: text(event.id, `Activity ${index + 1} ID`, { max: 120 }) || `activity-${index + 1}`,
+      action: text(event.action, `Activity ${index + 1} action`, { max: 500 }) || 'Project updated',
+      timestamp: text(event.timestamp, `Activity ${index + 1} timestamp`, { max: 160 }) || new Date().toLocaleString('en-US'),
+    }));
+  }
+  return output;
+}
+
 function validateDocument(value) {
   if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.projects)) {
     throw new Error('The tracker data format is not recognised.');
@@ -60,6 +120,7 @@ function validateDocument(value) {
   const metadata = isPlainObject(value.metadata) ? value.metadata : {};
   const preferences = isPlainObject(value.preferences) ? value.preferences : {};
   const dashboard = isPlainObject(preferences.dashboard) ? preferences.dashboard : {};
+  const projects = value.projects.map((project, index) => validateProject(project, index, ids));
   return {
     schemaVersion: 1,
     metadata: {
@@ -81,9 +142,9 @@ function validateDocument(value) {
         sort: text(dashboard.sort, 'Dashboard sort', { max: 60 }) || 'recent',
       },
     },
-    projects: value.projects.map((project, index) => validateProject(project, index, ids)),
-    projectDetailsById: isPlainObject(value.projectDetailsById) ? value.projectDetailsById : {},
-    activityByProjectId: isPlainObject(value.activityByProjectId) ? value.activityByProjectId : {},
+    projects,
+    projectDetailsById: validateProjectDetails(value.projectDetailsById, ids),
+    activityByProjectId: validateActivity(value.activityByProjectId, ids),
   };
 }
 

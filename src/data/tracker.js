@@ -72,9 +72,11 @@ export async function importTrackerBackup() {
 
 export function createProject(document, values) {
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const id = generateId(document.projects);
   return {
     ...document,
     metadata: { ...document.metadata, updatedAt: new Date().toISOString() },
-    projects: [{ ...values, id: generateId(document.projects), updated: today }, ...document.projects],
+    projects: [{ ...values, id, created: today, updated: today }, ...document.projects],
+    projectDetailsById: { ...document.projectDetailsById, [id]: { created: today, requirement: '', requirementFollowUp: '', inputs: [], bom: [], workflow: {} } },
   };
 }
