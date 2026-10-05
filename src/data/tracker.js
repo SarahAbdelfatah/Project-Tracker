@@ -1,6 +1,5 @@
 import { generateId } from './projects';
 
-const LEGACY_STORAGE_KEY = 'ae_project_tracker_v1';
 const PREVIEW_DOCUMENT_KEY = 'ae_project_tracker_document_preview';
 
 export function createEmptyDocument() {
@@ -18,15 +17,6 @@ export function createEmptyDocument() {
   };
 }
 
-export function readLegacyProjects() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 export async function loadTrackerDocument() {
   if (window.projectTracker) return window.projectTracker.load();
 
@@ -41,10 +31,9 @@ export async function loadTrackerDocument() {
       };
     }
   } catch {
-    // Fall through to the legacy projects-only store.
+    // Fall through to a clean document if the preview store is unreadable.
   }
   const document = createEmptyDocument();
-  document.projects = readLegacyProjects();
   return {
     document,
     storage: { mode: 'browser-preview', encrypted: false },
@@ -56,7 +45,6 @@ export async function loadTrackerDocument() {
 export async function saveTrackerDocument(document) {
   if (window.projectTracker) return window.projectTracker.save(document);
   localStorage.setItem(PREVIEW_DOCUMENT_KEY, JSON.stringify(document));
-  localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(document.projects));
   return { document, storage: { mode: 'browser-preview', encrypted: false } };
 }
 

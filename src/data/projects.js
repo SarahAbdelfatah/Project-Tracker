@@ -28,27 +28,6 @@ export const BIDDING_PHASES = {
 // Project states
 export const PROJECT_STATES = ['Active', 'Closed', 'On Hold'];
 
-// ─── LocalStorage persistence ────────────────────────────────────────────────
-const STORAGE_KEY = 'ae_project_tracker_v1';
-
-export function loadProjects() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-export function saveProjects(projects) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  } catch (e) {
-    console.error('Failed to save projects to localStorage', e);
-  }
-}
-
 // Generate a unique numeric ID for new projects
 export function generateId(existingProjects) {
   if (existingProjects.length === 0) return 1;
