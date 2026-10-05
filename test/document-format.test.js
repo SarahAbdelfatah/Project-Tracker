@@ -61,6 +61,17 @@ test('malformed documents are rejected without producing an empty replacement', 
   assert.throws(() => validateDocument({ schemaVersion: 1, projects: [{ id: 1 }] }), /Project name/);
 });
 
+test('project requirements preserve spaces while a user is typing', () => {
+  const source = populatedDocument();
+  source.projectDetailsById[7].requirement = 'Keep this space ';
+  source.projectDetailsById[7].requirementFollowUp = 'Then continue typing ';
+
+  const clean = validateDocument(source);
+
+  assert.equal(clean.projectDetailsById[7].requirement, 'Keep this space ');
+  assert.equal(clean.projectDetailsById[7].requirementFollowUp, 'Then continue typing ');
+});
+
 test('export and import round-trip preserves every project', () => {
   const source = populatedDocument();
   const exported = createBackupExport(source, '2026-10-05T10:00:00.000Z');

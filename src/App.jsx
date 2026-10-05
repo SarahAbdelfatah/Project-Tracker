@@ -50,8 +50,8 @@ function AppTopbar({ saveState, storage, theme, onThemeToggle, onOpenDataTools }
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Project Tracker" />
-        <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Project tracker</strong></span>
+        <img className="app-mark" src={`${import.meta.env.BASE_URL}app-icon.png`} alt="Abdelfatah's Project Tracker" />
+        <span className="app-wordmark">APPLICATION ENGINEERING<br /><strong>Abdelfatah&apos;s Project Tracker</strong></span>
       </div>
       <div className="topbar-right">
         <span className={`save-indicator ${saveState}`} title={storage?.encrypted ? 'Encrypted local storage' : 'Local storage'}>

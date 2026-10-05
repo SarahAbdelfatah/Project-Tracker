@@ -2,13 +2,13 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function text(value, label, { required = false, max = 500 } = {}) {
+function text(value, label, { required = false, max = 500, trim = true } = {}) {
   if (typeof value !== 'string') {
     if (required) throw new Error(`${label} must be text.`);
     return '';
   }
-  const clean = value.trim();
-  if (required && !clean) throw new Error(`${label} is required.`);
+  const clean = trim ? value.trim() : value;
+  if (required && !clean.trim()) throw new Error(`${label} is required.`);
   if (clean.length > max) throw new Error(`${label} is too long.`);
   return clean;
 }
@@ -74,8 +74,8 @@ function validateProjectDetails(value, validIds) {
     }
     output[id] = {
       created: text(detail.created, 'Project created date', { max: 120 }),
-      requirement: text(detail.requirement, 'Project requirement', { max: 10000 }),
-      requirementFollowUp: text(detail.requirementFollowUp, 'Project requirement follow-up', { max: 5000 }),
+      requirement: text(detail.requirement, 'Project requirement', { max: 10000, trim: false }),
+      requirementFollowUp: text(detail.requirementFollowUp, 'Project requirement follow-up', { max: 5000, trim: false }),
       inputs,
       bom,
       workflow,

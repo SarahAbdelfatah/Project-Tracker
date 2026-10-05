@@ -87,13 +87,13 @@ ipcMain.handle('tracker:save', async (_event, document) => {
 ipcMain.handle('tracker:export', async () => {
   const loaded = await loadDocument();
   if (!loaded.document) return { cancelled: true, reason: 'No valid data is available to export.' };
-  const result = await dialog.showSaveDialog({ title: 'Export Project Tracker backup', defaultPath: 'project-tracker-backup.json', filters: [{ name: 'JSON backup', extensions: ['json'] }] });
+  const result = await dialog.showSaveDialog({ title: "Export Abdelfatah's Project Tracker backup", defaultPath: 'project-tracker-backup.json', filters: [{ name: 'JSON backup', extensions: ['json'] }] });
   if (result.canceled || !result.filePath) return { cancelled: true };
   await fs.writeFile(result.filePath, JSON.stringify(createBackupExport(loaded.document), null, 2), 'utf8');
   return { cancelled: false, filePath: result.filePath };
 });
 ipcMain.handle('tracker:import', async () => {
-  const result = await dialog.showOpenDialog({ title: 'Import Project Tracker backup', properties: ['openFile'], filters: [{ name: 'JSON backup', extensions: ['json'] }] });
+  const result = await dialog.showOpenDialog({ title: "Import Abdelfatah's Project Tracker backup", properties: ['openFile'], filters: [{ name: 'JSON backup', extensions: ['json'] }] });
   if (result.canceled || !result.filePaths[0]) return { cancelled: true };
   const imported = JSON.parse(await fs.readFile(result.filePaths[0], 'utf8'));
   const clean = documentFromBackup(imported);
