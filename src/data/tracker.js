@@ -1,21 +1,9 @@
 import { generateId } from './projects';
+import { createEmptyDocument } from './document-format';
+
+export { createEmptyDocument } from './document-format';
 
 const PREVIEW_DOCUMENT_KEY = 'ae_project_tracker_document_preview';
-
-export function createEmptyDocument() {
-  return {
-    schemaVersion: 1,
-    metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    preferences: {
-      theme: 'light',
-      sidebarCollapsed: false,
-      dashboard: { focus: 'all', state: 'all', stage: 'all', phase: 'all', client: 'all', inputs: 'all', content: 'all', age: 'all', sort: 'recent' },
-    },
-    projects: [],
-    projectDetailsById: {},
-    activityByProjectId: {},
-  };
-}
 
 export async function loadTrackerDocument() {
   if (window.projectTracker) return window.projectTracker.load();
@@ -30,8 +18,13 @@ export async function loadTrackerDocument() {
         isNew: false,
       };
     }
-  } catch {
-    // Fall through to a clean document if the preview store is unreadable.
+  } catch (error) {
+    return {
+      document: null,
+      storage: { mode: 'browser-preview', encrypted: false },
+      recovery: { state: 'needs-recovery', failures: [{ file: PREVIEW_DOCUMENT_KEY, reason: error.message }] },
+      isNew: false,
+    };
   }
   const document = createEmptyDocument();
   return {

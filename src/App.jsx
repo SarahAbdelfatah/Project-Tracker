@@ -6,6 +6,7 @@ import {
   createEmptyDocument, createProject, exportTrackerBackup, importTrackerBackup,
   loadTrackerDocument, saveTrackerDocument,
 } from './data/tracker';
+import { createSaveQueue } from './data/save-queue';
 import './styles.css';
 
 // ─── SVG icon set ─────────────────────────────────────────────────────────────
@@ -65,6 +66,53 @@ function AppTopbar({ saveState, storage, theme, onThemeToggle, onOpenDataTools }
       </div>
     </header>
   );
+}
+
+const DIALOG_FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+function useDialogAccessibility(onClose) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    const previousFocus = globalThis.document.activeElement;
+    const focusFrame = window.requestAnimationFrame(() => {
+      if (!dialog.contains(globalThis.document.activeElement)) dialog.querySelector(DIALOG_FOCUSABLE)?.focus();
+    });
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && closeRef.current) {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && globalThis.document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && globalThis.document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    dialog.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      dialog.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
+
+  return dialogRef;
 }
 
 const LEGACY_PLACEHOLDER_INPUT_LABELS = [
@@ -197,6 +245,7 @@ function RequirementExpandDialog({ detail, onChange, onClose }) {
   const [editingField, setEditingField] = useState('requirement');
   const requirementRef = useRef(null);
   const followUpRef = useRef(null);
+  const dialogRef = useDialogAccessibility(onClose);
   useEffect(() => {
     if (!editing) return;
     (editingField === 'followup' ? followUpRef : requirementRef).current?.focus();
@@ -209,7 +258,7 @@ function RequirementExpandDialog({ detail, onChange, onClose }) {
     setDraft({ requirement: detail.requirement, requirementFollowUp: detail.requirementFollowUp || '' });
     setEditing(false);
   };
-  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-requirement-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-requirement-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-requirement-title">Project requirement</h2><p className="dialog-desc">{editing ? 'Editing note' : 'Full note view'}</p></div><div className="dialog-body">{editing ? <><textarea ref={requirementRef} maxLength={10000} value={draft.requirement} onChange={(event) => setDraft({ ...draft, requirement: event.target.value })} aria-label="Expanded project requirement" /><span className="ref-character-count">{draft.requirement.length.toLocaleString()} / 10,000</span><textarea ref={followUpRef} className="followup" maxLength={5000} value={draft.requirementFollowUp} onChange={(event) => setDraft({ ...draft, requirementFollowUp: event.target.value })} aria-label="Expanded requirement follow-up" /></> : <><div className="ref-requirement-preview" role="button" tabIndex="0" onClick={() => startEditing('requirement')} onKeyDown={(event) => keyboardEdit(event, 'requirement')} aria-label="Edit project requirement">{draft.requirement || <span>Add the project requirement…</span>}</div><div className="ref-requirement-preview followup" role="button" tabIndex="0" onClick={() => startEditing('followup')} onKeyDown={(event) => keyboardEdit(event, 'followup')} aria-label="Edit requirement follow-up">{draft.requirementFollowUp || <span>Add a follow-up note…</span>}</div></>}</div><div className="dialog-footer">{editing ? <><button className="btn-secondary" onClick={cancelEditing}>Cancel</button><button className="btn-primary" onClick={() => { onChange(draft, 'Updated project requirement'); onClose(); }}>Save note</button></> : <button className="btn-primary" onClick={onClose}>Done</button>}</div></section></div>;
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section ref={dialogRef} className="dialog ref-requirement-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-requirement-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-requirement-title">Project requirement</h2><p className="dialog-desc">{editing ? 'Editing note' : 'Full note view'}</p></div><div className="dialog-body">{editing ? <><textarea ref={requirementRef} maxLength={10000} value={draft.requirement} onChange={(event) => setDraft({ ...draft, requirement: event.target.value })} aria-label="Expanded project requirement" /><span className="ref-character-count">{draft.requirement.length.toLocaleString()} / 10,000</span><textarea ref={followUpRef} className="followup" maxLength={5000} value={draft.requirementFollowUp} onChange={(event) => setDraft({ ...draft, requirementFollowUp: event.target.value })} aria-label="Expanded requirement follow-up" /></> : <><div className="ref-requirement-preview" role="button" tabIndex="0" onClick={() => startEditing('requirement')} onKeyDown={(event) => keyboardEdit(event, 'requirement')} aria-label="Edit project requirement">{draft.requirement || <span>Add the project requirement…</span>}</div><div className="ref-requirement-preview followup" role="button" tabIndex="0" onClick={() => startEditing('followup')} onKeyDown={(event) => keyboardEdit(event, 'followup')} aria-label="Edit requirement follow-up">{draft.requirementFollowUp || <span>Add a follow-up note…</span>}</div></>}</div><div className="dialog-footer">{editing ? <><button className="btn-secondary" onClick={cancelEditing}>Cancel</button><button className="btn-primary" onClick={() => { onChange(draft, 'Updated project requirement'); onClose(); }}>Save note</button></> : <button className="btn-primary" onClick={onClose}>Done</button>}</div></section></div>;
 }
 
 function RequirementCard({ detail, onChange }) {
@@ -243,7 +292,8 @@ function InputRows({ inputs, onChange, expanded = false }) {
 
 function InputsExpandDialog({ inputs, onChange, onClose }) {
   const addInput = () => onChange([...inputs, { id: `input-${Date.now()}`, label: '', received: false, status: 'Not provided' }]);
-  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-inputs-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-inputs-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-inputs-title">Project inputs</h2><p className="dialog-desc">{inputs.filter((input) => input.received).length} of {inputs.length} received</p></div><div className="dialog-body ref-inputs-dialog-body"><div className="ref-inputs-dialog-actions"><span>Hover over an input to preview its full text.</span><button className="ref-dark-button" onClick={addInput}><Icon name="plus" size={14} /> Add item</button></div><InputRows inputs={inputs} onChange={onChange} expanded /></div><div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Done</button></div></section></div>;
+  const dialogRef = useDialogAccessibility(onClose);
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section ref={dialogRef} className="dialog ref-inputs-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-inputs-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-inputs-title">Project inputs</h2><p className="dialog-desc">{inputs.filter((input) => input.received).length} of {inputs.length} received</p></div><div className="dialog-body ref-inputs-dialog-body"><div className="ref-inputs-dialog-actions"><span>Hover over an input to preview its full text.</span><button className="ref-dark-button" onClick={addInput}><Icon name="plus" size={14} /> Add item</button></div><InputRows inputs={inputs} onChange={onChange} expanded /></div><div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Done</button></div></section></div>;
 }
 
 function InputsCard({ inputs, onChange }) {
@@ -282,6 +332,7 @@ function BomRowsTable({ rows, onUpdate, onRemove, expanded = false }) {
 function BomExpandDialog({ rows, onChange, onClose }) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
+  const dialogRef = useDialogAccessibility(onClose);
   const updateRow = (id, key, value) => onChange(rows.map((row) => row.id === id ? { ...row, [key]: value } : row), false);
   const removeRow = (id) => onChange(rows.filter((row) => row.id !== id), true);
   const addRow = () => onChange([...rows, { id: `bom-${Date.now()}`, partNumber: '', description: '', quantity: '', notes: '', isNew: true }], true);
@@ -293,7 +344,7 @@ function BomExpandDialog({ rows, onChange, onClose }) {
     if (parsed.length) onChange([...rows, ...parsed], true);
     setPaste(''); setPasteOpen(false);
   };
-  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-bom-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-bom-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-bom-title">Proposed BOM</h2><p className="dialog-desc">Expanded table view</p></div><div className="dialog-body ref-bom-dialog-body"><div className="ref-bom-dialog-actions"><span className="ref-column-resize-hint">↔ Drag column edges to resize</span><button className="ref-outline-button" onClick={() => setPasteOpen((open) => !open)}><Icon name="copy" size={14} /> Paste from Excel</button><button className="ref-dark-button" onClick={addRow}><Icon name="plus" size={14} /> Add row</button></div>{pasteOpen && <div className="ref-paste-row"><textarea autoFocus value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'Part number\tDescription\tQty\tNotes'} /><button className="ref-dark-button" onClick={applyPaste}>Add pasted rows</button></div>}<BomRowsTable rows={rows} onUpdate={updateRow} onRemove={removeRow} expanded /></div><div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Done</button></div></section></div>;
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section ref={dialogRef} className="dialog ref-bom-dialog" role="dialog" aria-modal="true" aria-labelledby="expanded-bom-title"><div className="dialog-header"><h2 className="dialog-title" id="expanded-bom-title">Proposed BOM</h2><p className="dialog-desc">Expanded table view</p></div><div className="dialog-body ref-bom-dialog-body"><div className="ref-bom-dialog-actions"><span className="ref-column-resize-hint">↔ Drag column edges to resize</span><button className="ref-outline-button" onClick={() => setPasteOpen((open) => !open)}><Icon name="copy" size={14} /> Paste from Excel</button><button className="ref-dark-button" onClick={addRow}><Icon name="plus" size={14} /> Add row</button></div>{pasteOpen && <div className="ref-paste-row"><textarea autoFocus value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'Part number\tDescription\tQty\tNotes'} /><button className="ref-dark-button" onClick={applyPaste}>Add pasted rows</button></div>}<BomRowsTable rows={rows} onUpdate={updateRow} onRemove={removeRow} expanded /></div><div className="dialog-footer"><button className="btn-primary" onClick={onClose}>Done</button></div></section></div>;
 }
 
 function BomCard({ rows, onChange }) {
@@ -322,7 +373,8 @@ function BomCard({ rows, onChange }) {
 function StepDetailsDialog({ step, entry, onSave, onClose }) {
   const [date, setDate] = useState(entry?.date || new Date().toISOString().slice(0, 10));
   const [specs, setSpecs] = useState(entry?.specs || '');
-  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section className="dialog ref-step-dialog" role="dialog" aria-modal="true" aria-labelledby="step-dialog-title"><div className="dialog-header"><h2 className="dialog-title" id="step-dialog-title">{step}</h2><p className="dialog-desc">Specifications are optional. The date defaults to today and can be corrected.</p></div><div className="dialog-body"><div className="field-group"><label className="field-label" htmlFor="step-update-date">Update date</label><input id="step-update-date" className="field-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="field-group"><label className="field-label" htmlFor="step-specs">Specifications</label><textarea id="step-specs" className="field-input ref-specs-input" value={specs} onChange={(event) => setSpecs(event.target.value)} placeholder="Add free-text specifications…" /></div></div><div className="dialog-footer"><button className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary" onClick={() => { onSave({ date, specs }); onClose(); }}>Save</button></div></section></div>;
+  const dialogRef = useDialogAccessibility(onClose);
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><section ref={dialogRef} className="dialog ref-step-dialog" role="dialog" aria-modal="true" aria-labelledby="step-dialog-title"><div className="dialog-header"><h2 className="dialog-title" id="step-dialog-title">{step}</h2><p className="dialog-desc">Specifications are optional. The date defaults to today and can be corrected.</p></div><div className="dialog-body"><div className="field-group"><label className="field-label" htmlFor="step-update-date">Update date</label><input id="step-update-date" className="field-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="field-group"><label className="field-label" htmlFor="step-specs">Specifications</label><textarea id="step-specs" className="field-input ref-specs-input" value={specs} onChange={(event) => setSpecs(event.target.value)} placeholder="Add free-text specifications…" /></div></div><div className="dialog-footer"><button className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary" onClick={() => { onSave({ date, specs }); onClose(); }}>Save</button></div></section></div>;
 }
 
 function ProjectStatusCard({ project, details, onWorkflowChange }) {
@@ -362,7 +414,8 @@ function ProjectStatusCard({ project, details, onWorkflowChange }) {
 
 function EditProjectDialog({ project, onSave, onClose }) {
   const [draft, setDraft] = useState({ name: project.name, client: project.client, opid: project.opid });
-  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><form className="dialog" onSubmit={(event) => { event.preventDefault(); onSave({ ...draft, opid: draft.opid.toUpperCase() }); onClose(); }}><div className="dialog-header"><h2 className="dialog-title">Edit project</h2></div><div className="dialog-body"><div className="field-group"><label className="field-label">Project name</label><input className="field-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div><div className="two-col"><div className="field-group"><label className="field-label">Client / account</label><input className="field-input" value={draft.client} onChange={(event) => setDraft({ ...draft, client: event.target.value })} /></div><div className="field-group"><label className="field-label">OPID</label><input className="field-input" value={draft.opid} onChange={(event) => setDraft({ ...draft, opid: event.target.value })} /></div></div></div><div className="dialog-footer"><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary">Save changes</button></div></form></div>;
+  const dialogRef = useDialogAccessibility(onClose);
+  return <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}><form ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby="edit-project-title" onSubmit={(event) => { event.preventDefault(); onSave({ ...draft, opid: draft.opid.toUpperCase() }); onClose(); }}><div className="dialog-header"><h2 className="dialog-title" id="edit-project-title">Edit project</h2></div><div className="dialog-body"><div className="field-group"><label className="field-label">Project name</label><input className="field-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div><div className="two-col"><div className="field-group"><label className="field-label">Client / account</label><input className="field-input" value={draft.client} onChange={(event) => setDraft({ ...draft, client: event.target.value })} /></div><div className="field-group"><label className="field-label">OPID</label><input className="field-input" value={draft.opid} onChange={(event) => setDraft({ ...draft, opid: event.target.value })} /></div></div></div><div className="dialog-footer"><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary">Save changes</button></div></form></div>;
 }
 
 function ProjectDetailShell({ project, details, saveState, storage, theme, onThemeToggle, onOpenDataTools, onBack, onCopy, toast, onProjectChange, onDetailChange, onWorkflowChange }) {
@@ -396,6 +449,7 @@ function ProjectDetailShell({ project, details, saveState, storage, theme, onThe
 // ─── Add / New project dialog ──────────────────────────────────────────────────
 function AddProjectDialog({ onClose, onCreate }) {
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dialogRef = useDialogAccessibility(onClose);
 
   const [form, setForm] = useState({
     name: '',
@@ -443,10 +497,10 @@ function AddProjectDialog({ onClose, onCreate }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={handleBackdropClick}>
-      <form className="dialog" onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()}>
+      <form ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby="add-project-title" onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()}>
         <div className="dialog-header">
           <p className="dialog-eyebrow">New Project</p>
-          <h2 className="dialog-title">Add a project</h2>
+          <h2 className="dialog-title" id="add-project-title">Add a project</h2>
           <p className="dialog-desc">
             Start with the essentials. You can update the status anytime.
           </p>
@@ -576,9 +630,10 @@ function AddProjectDialog({ onClose, onCreate }) {
 }
 
 function DataToolsDialog({ onClose, onExport, onImport, message }) {
+  const dialogRef = useDialogAccessibility(onClose);
   return (
     <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="dialog data-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
+      <section ref={dialogRef} className="dialog data-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
         <div className="dialog-header">
           <h2 className="dialog-title" id="data-tools-title">Data & backups</h2>
           <p className="dialog-desc">Export a portable backup or restore a previously exported tracker file.</p>
@@ -595,9 +650,10 @@ function DataToolsDialog({ onClose, onExport, onImport, message }) {
 }
 
 function DeleteProjectDialog({ project, onClose, onConfirm }) {
+  const dialogRef = useDialogAccessibility(onClose);
   return (
     <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="dialog delete-project-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" aria-describedby="delete-project-description">
+      <section ref={dialogRef} className="dialog delete-project-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" aria-describedby="delete-project-description">
         <div className="dialog-header">
           <p className="dialog-eyebrow">Delete project</p>
           <h2 className="dialog-title" id="delete-project-title">Erase “{project.name}”?</h2>
@@ -613,9 +669,10 @@ function DeleteProjectDialog({ project, onClose, onConfirm }) {
 }
 
 function RecoveryDialog({ onStartFresh, onImport }) {
+  const dialogRef = useDialogAccessibility(null);
   return (
     <div className="modal-backdrop recovery-backdrop">
-      <section className="dialog recovery-dialog" role="alertdialog" aria-modal="true" aria-labelledby="recovery-title">
+      <section ref={dialogRef} className="dialog recovery-dialog" role="alertdialog" aria-modal="true" aria-labelledby="recovery-title">
         <div className="dialog-header">
           <p className="dialog-eyebrow">Recovery needed</p>
           <h2 className="dialog-title" id="recovery-title">Your tracker file could not be safely read</h2>
@@ -635,7 +692,43 @@ const DEFAULT_DASHBOARD_FILTERS = { focus: 'all', state: 'all', stage: 'all', ph
 function FilterField({ label, value, onChange, options }) {
   const [open, setOpen] = useState(false);
   const fieldRef = useRef(null);
+  const triggerRef = useRef(null);
   const selected = options.find(([optionValue]) => optionValue === value) || options[0];
+
+  const focusOption = (position) => {
+    window.requestAnimationFrame(() => {
+      const optionButtons = [...(fieldRef.current?.querySelectorAll('[role="option"]') || [])];
+      if (!optionButtons.length) return;
+      const selectedIndex = Math.max(0, options.findIndex(([optionValue]) => optionValue === value));
+      const targetIndex = position === 'last' ? optionButtons.length - 1 : position === 'selected' ? selectedIndex : 0;
+      optionButtons[targetIndex]?.focus();
+    });
+  };
+
+  const openFromKeyboard = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    setOpen(true);
+    focusOption(event.key === 'ArrowUp' || event.key === 'End' ? 'last' : event.key === 'Home' ? 'first' : 'selected');
+  };
+
+  const handleMenuKeyDown = (event) => {
+    const optionButtons = [...(fieldRef.current?.querySelectorAll('[role="option"]') || [])];
+    const activeIndex = optionButtons.indexOf(globalThis.document.activeElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !optionButtons.length) return;
+    event.preventDefault();
+    const nextIndex = event.key === 'Home' ? 0
+      : event.key === 'End' ? optionButtons.length - 1
+        : event.key === 'ArrowDown' ? (activeIndex + 1 + optionButtons.length) % optionButtons.length
+          : (activeIndex - 1 + optionButtons.length) % optionButtons.length;
+    optionButtons[nextIndex]?.focus();
+  };
 
   useEffect(() => {
     const closeWhenOutside = (event) => {
@@ -648,13 +741,13 @@ function FilterField({ label, value, onChange, options }) {
   return (
     <div className="filter-field" ref={fieldRef}>
       <span>{label}</span>
-      <button className={`filter-select-trigger ${open ? 'open' : ''}`} onClick={() => setOpen((isOpen) => !isOpen)} aria-haspopup="listbox" aria-expanded={open}>
+      <button ref={triggerRef} className={`filter-select-trigger ${open ? 'open' : ''}`} onClick={() => setOpen((isOpen) => !isOpen)} onKeyDown={openFromKeyboard} aria-haspopup="listbox" aria-expanded={open}>
         <span>{selected[1]}</span><Icon name="chevronDown" size={15} />
       </button>
       {open && (
-        <div className="filter-select-menu" role="listbox" aria-label={label}>
+        <div className="filter-select-menu" role="listbox" aria-label={label} onKeyDown={handleMenuKeyDown}>
           {options.map(([optionValue, optionLabel]) => (
-            <button key={optionValue} className={optionValue === value ? 'selected' : ''} role="option" aria-selected={optionValue === value} onClick={() => { onChange(optionValue); setOpen(false); }}>
+            <button key={optionValue} className={optionValue === value ? 'selected' : ''} role="option" aria-selected={optionValue === value} tabIndex={optionValue === value ? 0 : -1} onClick={() => { onChange(optionValue); setOpen(false); triggerRef.current?.focus(); }}>
               {optionLabel}{optionValue === value && <Icon name="check" size={13} />}
             </button>
           ))}
@@ -666,9 +759,10 @@ function FilterField({ label, value, onChange, options }) {
 
 function FiltersDialog({ filters, clients, onChange, onClear, onClose }) {
   const set = (key, value) => onChange({ ...filters, [key]: value });
+  const dialogRef = useDialogAccessibility(onClose);
   return (
     <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="dialog filters-dialog" role="dialog" aria-modal="true" aria-labelledby="filters-title">
+      <section ref={dialogRef} className="dialog filters-dialog" role="dialog" aria-modal="true" aria-labelledby="filters-title">
         <div className="dialog-header filters-header">
           <div><h2 className="dialog-title" id="filters-title">Find the right project</h2><p className="dialog-desc">Combine a focus view with precise filters and sorting.</p></div>
           <button className="text-button" onClick={onClear}>Clear all</button>
@@ -712,20 +806,27 @@ export default function App() {
   const [dataToolMessage, setDataToolMessage] = useState('');
   const [toast, setToast]       = useState(null);
   const [route, setRoute]       = useState(() => window.location.hash);
-  const saveQueue = useRef(Promise.resolve());
+  const saveQueue = useRef(null);
+  const saveRevision = useRef(0);
+  if (!saveQueue.current) saveQueue.current = createSaveQueue(saveTrackerDocument);
 
   const persistDocument = useCallback((nextDocument) => {
+    const revision = ++saveRevision.current;
     setDocument(nextDocument);
     setSaveState('saving');
-    saveQueue.current = saveQueue.current
-      .catch(() => undefined)
-      .then(() => saveTrackerDocument(nextDocument))
+    return saveQueue.current(nextDocument)
       .then((result) => {
         setStorage(result.storage);
-        setSaveState('saved');
+        if (revision === saveRevision.current) {
+          if (result.document) setDocument(result.document);
+          setSaveState('saved');
+        }
+        return result;
       })
-      .catch(() => setSaveState('save-error'));
-    return saveQueue.current;
+      .catch((error) => {
+        if (revision === saveRevision.current) setSaveState('save-error');
+        return { error };
+      });
   }, []);
 
   useEffect(() => {
